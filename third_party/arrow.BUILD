@@ -35,6 +35,7 @@ genrule(
            "-e 's/@ARROW_VERSION_MINOR@/0/g' " +
            "-e 's/@ARROW_VERSION_PATCH@/0/g' " +
            "-e 's/cmakedefine ARROW_USE_NATIVE_INT128/undef ARROW_USE_NATIVE_INT128/g' " +
+           "-e 's/cmakedefine ARROW_WITH_OPENTELEMETRY/undef ARROW_WITH_OPENTELEMETRY/g' " +
            "-e 's/cmakedefine/define/g' " +
            "$< >$@"),
 )
@@ -82,7 +83,8 @@ cc_library(
             "cpp/src/generated/*.cpp",
         ],
         exclude = [
-            "cpp/src/**/*_benchmark.cc",
+            "cpp/src/**/*benchmark*.cc",
+            "cpp/src/**/*benchmark*.h",
             "cpp/src/**/*_main.cc",
             "cpp/src/**/*_nossl.cc",
             "cpp/src/**/*test*.h",
@@ -96,6 +98,7 @@ cc_library(
             "cpp/src/arrow/util/bpacking_avx512.cc",
             "cpp/src/arrow/util/bpacking_neon.cc",
             "cpp/src/arrow/util/tracing_internal.cc",
+            "cpp/src/arrow/memory_pool_jemalloc.cc",
         ],
     ),
     hdrs = [
