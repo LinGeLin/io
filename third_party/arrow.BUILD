@@ -34,11 +34,17 @@ genrule(
            "-e 's/@ARROW_VERSION_MAJOR@/3/g' " +
            "-e 's/@ARROW_VERSION_MINOR@/0/g' " +
            "-e 's/@ARROW_VERSION_PATCH@/0/g' " +
+           "-e 's/cmakedefine ARROW_JEMALLOC/undef ARROW_JEMALLOC/g' " +
+           "-e 's/cmakedefine ARROW_JEMALLOC_VENDORED/undef ARROW_JEMALLOC_VENDORED/g' " +
+           "-e 's/cmakedefine ARROW_GCS/undef ARROW_GCS/g' " +
            "-e 's/cmakedefine ARROW_USE_NATIVE_INT128/undef ARROW_USE_NATIVE_INT128/g' " +
            "-e 's/cmakedefine ARROW_WITH_OPENTELEMETRY/undef ARROW_WITH_OPENTELEMETRY/g' " +
            "-e 's/cmakedefine/define/g' " +
            "$< >$@"),
 )
+
+#           "-e 's/cmakedefine ARROW_JEMALLOC/undef ARROW_JEMALLOC/g' " +
+#           "-e 's/cmakedefine ARROW_JEMALLOC_VENDORED/undef ARROW_JEMALLOC_VENDORED/g' " +
 
 genrule(
     name = "parquet_version_h",
@@ -57,9 +63,7 @@ cc_library(
         [
             "cpp/src/arrow/*.cc",
             "cpp/src/arrow/array/*.cc",
-            "cpp/src/arrow/compute/*.cc",
-            "cpp/src/arrow/compute/exec/*.cc",
-            "cpp/src/arrow/compute/kernels/*.cc",
+            "cpp/src/arrow/compute/**/*.cc",
             "cpp/src/arrow/csv/*.cc",
             "cpp/src/arrow/dataset/*.cc",
             "cpp/src/arrow/filesystem/*.cc",
@@ -114,6 +118,7 @@ cc_library(
         "ARROW_WITH_ZLIB",
         "ARROW_WITH_ZSTD",
         "ARROW_WITH_BZ2",
+        "ARROW_JEMALLOC",
         "ARROW_STATIC",
         "ARROW_EXPORT=",
         "PARQUET_STATIC",

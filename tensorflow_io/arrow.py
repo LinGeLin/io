@@ -18,6 +18,7 @@
 @@ArrowFeatherDataset
 @@ArrowStreamDataset
 @@ArrowS3Dataset
+@@ArrowV4Dataset
 @@list_feather_columns
 """
 
@@ -28,6 +29,7 @@ from tensorflow_io.python.ops.arrow_dataset_ops import ArrowDataset
 from tensorflow_io.python.ops.arrow_dataset_ops import ArrowFeatherDataset
 from tensorflow_io.python.ops.arrow_dataset_ops import ArrowStreamDataset
 from tensorflow_io.python.ops.arrow_dataset_ops import ArrowS3Dataset
+from tensorflow_io.python.ops.arrow_dataset_ops import ArrowV4Dataset
 from tensorflow_io.python.ops.arrow_dataset_ops import list_feather_columns
 
 
@@ -36,6 +38,7 @@ _allowed_symbols = [
     "ArrowFeatherDataset",
     "ArrowStreamDataset",
     "ArrowS3Dataset",
+    "ArrowV4Dataset",
     "list_feather_columns",
 ]
 

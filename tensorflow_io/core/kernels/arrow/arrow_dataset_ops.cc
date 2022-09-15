@@ -16,6 +16,8 @@ limitations under the License.
 #include <numeric>
 
 #include "arrow/api.h"
+#include "arrow/compute/exec/exec_plan.h"
+#include "arrow/compute/exec/options.h"
 #include "arrow/io/stdio.h"
 #include "arrow/ipc/api.h"
 #include "arrow/result.h"
@@ -1275,6 +1277,7 @@ class ArrowS3DatasetOp : public ArrowOpKernelBase {
               break;
             }
           }
+
         } while (0);
 
         if (background) {
@@ -1313,6 +1316,612 @@ class ArrowS3DatasetOp : public ArrowOpKernelBase {
   };
 };  // class ArrowS3DatasetOp
 
+class ArrowV4DatasetOp : public ArrowOpKernelBase {
+ public:
+  explicit ArrowV4DatasetOp(OpKernelConstruction* ctx)
+      : ArrowOpKernelBase(ctx) {}
+
+  virtual void MakeArrowDataset(
+      OpKernelContext* ctx, const std::vector<int32>& columns,
+      const int64 batch_size, const ArrowBatchMode batch_mode,
+      const DataTypeVector& output_types,
+      const std::vector<PartialTensorShape>& output_shapes,
+      ArrowDatasetBase** output) override {
+    tstring aws_access_key;
+    OP_REQUIRES_OK(ctx, ParseScalarArgument<tstring>(ctx, "aws_access_key",
+                                                     &aws_access_key));
+
+    tstring aws_secret_key;
+    OP_REQUIRES_OK(ctx, ParseScalarArgument<tstring>(ctx, "aws_secret_key",
+                                                     &aws_secret_key));
+
+    tstring aws_endpoint_override;
+    OP_REQUIRES_OK(ctx,
+                   ParseScalarArgument<tstring>(ctx, "aws_endpoint_override",
+                                                &aws_endpoint_override));
+
+    const Tensor* small_table_files_tensor;
+    OP_REQUIRES_OK(ctx,
+                   ctx->input("small_table_files", &small_table_files_tensor));
+    OP_REQUIRES(ctx, small_table_files_tensor->dims() <= 1,
+                errors::InvalidArgument(
+                    "`small_table_files` must be a scalar or vector."));
+    std::vector<string> small_table_files;
+    small_table_files.reserve(small_table_files_tensor->NumElements());
+    for (int i = 0; i < small_table_files_tensor->NumElements(); ++i) {
+      small_table_files.push_back(small_table_files_tensor->flat<tstring>()(i));
+    }
+
+    const Tensor* big_table_files_tensor;
+    OP_REQUIRES_OK(ctx, ctx->input("big_table_files", &big_table_files_tensor));
+    OP_REQUIRES(ctx, big_table_files_tensor->dims() <= 1,
+                errors::InvalidArgument(
+                    "`big_table_files` must be a scalar or vector."));
+    std::vector<string> big_table_files;
+    big_table_files.reserve(big_table_files_tensor->NumElements());
+    for (int i = 0; i < big_table_files_tensor->NumElements(); ++i) {
+      big_table_files.push_back(big_table_files_tensor->flat<tstring>()(i));
+    }
+
+    const Tensor* column_names_tensor;
+    OP_REQUIRES_OK(ctx, ctx->input("column_names", &column_names_tensor));
+    OP_REQUIRES(
+        ctx, column_names_tensor->dims() <= 1,
+        errors::InvalidArgument("`column_names` must be a scalar or vector."));
+    std::vector<string> column_names;
+    column_names.reserve(column_names_tensor->NumElements());
+    for (int i = 0; i < column_names_tensor->NumElements(); ++i) {
+      column_names.push_back(column_names_tensor->flat<tstring>()(i));
+    }
+
+    std::vector<int32> column_cols(column_names.size());
+    std::iota(column_cols.begin(), column_cols.end(), 0);
+
+    tstring filter;
+    OP_REQUIRES_OK(ctx, ParseScalarArgument<tstring>(ctx, "filter", &filter));
+
+    *output = new Dataset(
+        ctx, aws_access_key, aws_secret_key, aws_endpoint_override,
+        small_table_files, big_table_files, column_names, filter, column_cols,
+        batch_size, batch_mode, output_types_, output_shapes_);
+  }
+
+ private:
+  class Dataset : public ArrowDatasetBase {
+   public:
+    Dataset(OpKernelContext* ctx, const std::string& aws_access_key,
+            const std::string& aws_secret_key,
+            const std::string& aws_endpoint_override,
+            const std::vector<std::string>& small_table_files,
+            const std::vector<std::string>& big_table_files,
+            const std::vector<std::string>& column_names,
+            const std::string& filter, const std::vector<int32> columns,
+            const int64 batch_size, const ArrowBatchMode batch_mode,
+            const DataTypeVector& output_types,
+            const std::vector<PartialTensorShape>& output_shapes)
+        : ArrowDatasetBase(ctx, columns, batch_size, batch_mode, output_types,
+                           output_shapes),
+          aws_access_key_(aws_access_key),
+          aws_secret_key_(aws_secret_key),
+          aws_endpoint_override_(aws_endpoint_override),
+          small_table_files_(small_table_files),
+          big_table_files_(big_table_files),
+          column_names_(column_names),
+          filter_(filter) {}
+
+    string DebugString() const override { return "ArrowV4DatasetOp::Dataset"; }
+    Status InputDatasets(std::vector<const DatasetBase*>* inputs) const {
+      return Status::OK();
+    }
+    Status CheckExternalState() const override { return Status::OK(); }
+
+   protected:
+    Status AsGraphDefInternal(SerializationContext* ctx,
+                              DatasetGraphDefBuilder* b,
+                              Node** output) const override {
+      Node* aws_access_key = nullptr;
+      tstring access_key = aws_access_key_;
+      TF_RETURN_IF_ERROR(b->AddScalar(access_key, &aws_access_key));
+      Node* aws_secret_key = nullptr;
+      tstring secret_key = aws_secret_key_;
+      TF_RETURN_IF_ERROR(b->AddScalar(secret_key, &aws_secret_key));
+      Node* aws_endpoint_override = nullptr;
+      tstring endpoint_override = aws_endpoint_override_;
+      TF_RETURN_IF_ERROR(
+          b->AddScalar(endpoint_override, &aws_endpoint_override));
+      Node* small_table_files = nullptr;
+      TF_RETURN_IF_ERROR(b->AddVector(small_table_files_, &small_table_files));
+      Node* big_table_files = nullptr;
+      TF_RETURN_IF_ERROR(b->AddVector(big_table_files_, &big_table_files));
+      Node* column_names = nullptr;
+      TF_RETURN_IF_ERROR(b->AddVector(column_names_, &column_names));
+      Node* columns = nullptr;
+      TF_RETURN_IF_ERROR(b->AddVector(columns_, &columns));
+      Node* filter = nullptr;
+      tstring filter_str = filter_;
+      TF_RETURN_IF_ERROR(b->AddScalar(filter_str, &filter));
+      Node* batch_size = nullptr;
+      TF_RETURN_IF_ERROR(b->AddScalar(batch_size_, &batch_size));
+      Node* batch_mode = nullptr;
+      tstring batch_mode_str;
+      TF_RETURN_IF_ERROR(GetBatchModeStr(batch_mode_, &batch_mode_str));
+      TF_RETURN_IF_ERROR(b->AddScalar(batch_mode_str, &batch_mode));
+      TF_RETURN_IF_ERROR(
+          b->AddDataset(this,
+                        {aws_access_key, aws_secret_key, aws_endpoint_override,
+                         small_table_files, big_table_files, column_names,
+                         filter, columns, batch_size, batch_mode},
+                        output));
+      return Status::OK();
+    }
+
+    std::unique_ptr<IteratorBase> MakeIteratorInternal(
+        const string& prefix) const override {
+      return std::unique_ptr<IteratorBase>(
+          new Iterator({this, strings::StrCat(prefix, "::ArrowV4")}));
+    }
+
+   private:
+    class Iterator : public ArrowBaseIterator<Dataset> {
+     public:
+      explicit Iterator(const Params& params)
+          : ArrowBaseIterator<Dataset>(params) {}
+
+     private:
+      Status SetupStreamsLocked(Env* env)
+          TF_EXCLUSIVE_LOCKS_REQUIRED(mu_) override {
+        if (!s3fs_) {
+          arrow::fs::EnsureS3Initialized();
+          auto s3Options = arrow::fs::S3Options::FromAccessKey(
+              dataset()->aws_access_key_, dataset()->aws_secret_key_);
+          s3Options.endpoint_override = dataset()->aws_endpoint_override_;
+
+          s3fs_ = arrow::fs::S3FileSystem::Make(s3Options).ValueOrDie();
+        }
+
+        auto filter_expr_ptr =
+            const_cast<arrow::compute::Expression*>(&(dataset()->filter_expr_));
+
+        // filter
+        if (!dataset()->filter_.empty()) {
+          TF_RETURN_IF_ERROR(
+              ArrowUtil::ParseExpression(dataset()->filter_, *filter_expr_ptr));
+        }
+
+        TF_RETURN_IF_ERROR(ReadFile(current_file_idx_));
+
+        // If Filter is enabled, the entire file may not meet the filter
+        while (record_batches_.empty() &&
+               ++current_file_idx_ < dataset()->small_table_files_.size()) {
+          TF_RETURN_IF_ERROR(ReadFile(current_file_idx_));
+        }
+
+        if (!background_worker_) {
+          background_worker_ =
+              std::make_shared<BackgroundWorker>(env, "download_next_worker");
+        }
+
+        if (current_batch_idx_ < record_batches_.size()) {
+          current_batch_ = record_batches_[current_batch_idx_];
+        }
+
+        if (current_file_idx_ + 1 < dataset()->small_table_files_.size()) {
+          background_worker_->Schedule(std::bind(&Iterator::ReadFile, this,
+                                                 current_file_idx_ + 1, true));
+        }
+
+        return Status::OK();
+      }
+
+      Status NextStreamLocked(Env* env)
+          TF_EXCLUSIVE_LOCKS_REQUIRED(mu_) override {
+        ArrowBaseIterator<Dataset>::NextStreamLocked(env);
+        if (++current_batch_idx_ < record_batches_.size()) {
+          current_batch_ = record_batches_[current_batch_idx_];
+        } else if (++current_file_idx_ < dataset()->small_table_files_.size()) {
+          current_batch_idx_ = 0;
+          while (record_batches_.empty() &&
+                 ++current_file_idx_ < dataset()->small_table_files_.size()) {
+            TF_RETURN_IF_ERROR(ReadFile(current_file_idx_));
+          }
+          if (!record_batches_.empty()) {
+            current_batch_ = record_batches_[current_batch_idx_];
+          } else {
+            current_batch_ = nullptr;
+          }
+          {
+            mutex_lock lk(cv_mu_);
+            while (!background_thread_finished_) {
+              cv_.wait(lk);
+            }
+            if (!background_res_.ok()) {
+              return background_res_;
+            }
+          }
+
+          record_batches_.swap(next_record_batches_);
+
+          // If Filter is enabled, the entire file may not meet the filter
+          while (record_batches_.empty() &&
+                 ++current_file_idx_ < dataset()->small_table_files_.size()) {
+            TF_RETURN_IF_ERROR(ReadFile(current_file_idx_));
+          }
+
+          if (!record_batches_.empty()) {
+            current_batch_ = record_batches_[current_batch_idx_];
+          } else {
+            current_batch_ = nullptr;
+          }
+
+          background_thread_finished_ = false;
+          if (current_file_idx_ + 1 < dataset()->small_table_files_.size()) {
+            background_worker_->Schedule(std::bind(
+                &Iterator::ReadFile, this, current_file_idx_ + 1, true));
+          }
+        }
+        return Status::OK();
+      }
+
+      void ResetStreamsLocked() TF_EXCLUSIVE_LOCKS_REQUIRED(mu_) override {
+        ArrowBaseIterator<Dataset>::ResetStreamsLocked();
+        current_file_idx_ = 0;
+        current_batch_idx_ = 0;
+        record_batches_.clear();
+        next_record_batches_.clear();
+      }
+
+      Status GetColumnIndices(
+          const std::unique_ptr<parquet::arrow::FileReader>& reader,
+          std::vector<int>& column_indices) TF_EXCLUSIVE_LOCKS_REQUIRED(mu_) {
+        std::shared_ptr<arrow::Schema> schema;
+        reader->GetSchema(&schema);
+
+        int fieldIndex = schema->GetFieldIndex("uuid");
+        if (-1 != fieldIndex) {
+          column_indices.push_back(fieldIndex);
+        } else {
+          return errors::Internal("no uuid column, shema: " +
+                                  schema->ToString());
+        }
+
+        for (int i = 0; i < dataset()->column_names_.size(); i++) {
+          int fieldIndex = schema->GetFieldIndex(dataset()->column_names_[i]);
+          if (-1 != fieldIndex) {
+            column_indices.push_back(fieldIndex);
+            column_names_exist_[i] = true;
+          }
+        }
+
+        return Status::OK();
+      }
+
+      Status ReadTableFromFile(const std::string& parquet_file,
+                               bool small_table,
+                               std::shared_ptr<arrow::Table>& table)
+          TF_EXCLUSIVE_LOCKS_REQUIRED(mu_) {
+        auto access_file_result = s3fs_->OpenInputFile(parquet_file);
+        if (!access_file_result.ok()) {
+          return errors::InvalidArgument(
+              access_file_result.status().ToString());
+        }
+
+        auto access_file = access_file_result.ValueOrDie();
+
+        parquet::ArrowReaderProperties properties;
+        properties.set_use_threads(true);
+        properties.set_pre_buffer(true);
+        parquet::ReaderProperties parquet_properties =
+            parquet::default_reader_properties();
+
+        std::shared_ptr<parquet::arrow::FileReaderBuilder> builder =
+            std::make_shared<parquet::arrow::FileReaderBuilder>();
+        builder->Open(access_file, parquet_properties);
+
+        std::unique_ptr<parquet::arrow::FileReader> reader;
+        builder->properties(properties)->Build(&reader);
+
+        if (column_names_exist_.empty()) {
+          std::vector<bool>(dataset()->column_names_.size(), false)
+              .swap(column_names_exist_);
+        }
+        if (small_table) {
+          if (small_column_indices_.empty()) {
+            TF_RETURN_IF_ERROR(GetColumnIndices(reader, small_column_indices_));
+          }
+          // Read file columns and build a table
+          CHECK_ARROW(reader->ReadTable(small_column_indices_, &table));
+
+        } else {
+          if (big_column_indices_.empty()) {
+            TF_RETURN_IF_ERROR(GetColumnIndices(reader, big_column_indices_));
+          }
+
+          // check no exist column names request
+          if (!column_names_checked_) {
+            column_names_checked_ = true;
+            std::string err_column_names;
+            for (int i = 0; i < column_names_exist_.size(); i++) {
+              if (!column_names_exist_[i]) {
+                err_column_names =
+                    err_column_names + " " + dataset()->column_names_[i];
+              }
+            }
+            if (err_column_names.length() != 0) {
+              return errors::InvalidArgument("these column names don't exist: ",
+                                             err_column_names);
+            }
+          }
+
+          // Read file columns and build a table
+          CHECK_ARROW(reader->ReadTable(big_column_indices_, &table));
+        }
+        return Status::OK();
+      }
+
+      Status ReadFile(int file_index, bool background = false)
+          TF_EXCLUSIVE_LOCKS_REQUIRED(mu_) {
+        namespace cp = arrow::compute;
+        Status res = Status::OK();
+        arrow::Status arrow_status;
+        do {
+          std::shared_ptr<arrow::Table> small_table;
+          res = ReadTableFromFile(dataset()->small_table_files_[file_index],
+                                  true, small_table);
+          if (!res.ok()) {
+            break;
+          }
+          std::shared_ptr<arrow::Table> big_table;
+          std::vector<std::shared_ptr<arrow::Table>> big_tables;
+
+          // split table files
+          std::vector<std::string> big_table_files;
+          const std::string& files_str =
+              dataset()->big_table_files_[file_index];
+          size_t pos_start = 0, pos_end;
+
+          while ((pos_end = files_str.find(',', pos_start)) !=
+                 std::string::npos) {
+            big_table_files.push_back(
+                files_str.substr(pos_start, pos_end - pos_start));
+            pos_start = pos_end + 1;
+          }
+          big_table_files.push_back(files_str.substr(pos_start));
+
+          for (const auto& file : big_table_files) {
+            std::shared_ptr<arrow::Table> table;
+            res = ReadTableFromFile(file, false, table);
+            if (!res.ok()) {
+              break;
+            }
+            big_tables.push_back(table);
+          }
+          if (!res.ok()) {
+            break;
+          }
+
+          auto concat_table_result = arrow::ConcatenateTables(big_tables);
+
+          if (!concat_table_result.ok()) {
+            res = errors::Internal(concat_table_result.status().ToString());
+            break;
+          }
+          big_table = concat_table_result.ValueOrDie();
+
+          // exec plan
+          cp::ExecContext exec_context(arrow::default_memory_pool(),
+                                       arrow::internal::GetCpuThreadPool());
+          // cp::ExecContext exec_context;
+          auto plan_result = cp::ExecPlan::Make(&exec_context);
+          if (!plan_result.ok()) {
+            res = errors::Internal("make plan failed: " +
+                                   plan_result.status().ToString());
+            break;
+          }
+          auto plan = plan_result.ValueOrDie();
+
+          arrow::AsyncGenerator<arrow::util::optional<cp::ExecBatch>> sink_gen;
+
+          // table source node
+          auto l_table_source_node_option =
+              cp::TableSourceNodeOptions{small_table, 1};
+          auto r_table_source_node_option =
+              cp::TableSourceNodeOptions{big_table, 1};
+
+          auto l_source_result = cp::MakeExecNode(
+              "table_source", plan.get(), {}, l_table_source_node_option);
+          if (!l_source_result.ok()) {
+            res = errors::Internal("make l_source failed: " +
+                                   l_source_result.status().ToString());
+            break;
+          }
+          auto l_source = l_source_result.ValueOrDie();
+
+          auto r_source_result = cp::MakeExecNode(
+              "table_source", plan.get(), {}, r_table_source_node_option);
+          if (!r_source_result.ok()) {
+            res = errors::Internal("make r_source failed: " +
+                                   r_source_result.status().ToString());
+            break;
+          }
+          auto r_source = r_source_result.ValueOrDie();
+
+          // hashjoin node
+          cp::HashJoinNodeOptions join_opts{
+              cp::JoinType::INNER, {"uuid"}, {"uuid"}};
+          auto hashjoin_result = cp::MakeExecNode(
+              "hashjoin", plan.get(), {l_source, r_source}, join_opts);
+          if (!hashjoin_result.ok()) {
+            res = errors::Internal("make hashjoin node failed: " +
+                                   r_source_result.status().ToString());
+            break;
+          }
+          auto hashjoin = hashjoin_result.ValueOrDie();
+
+          // projection node
+          std::vector<cp::Expression> projections;
+          projections.reserve(dataset()->column_names_.size());
+          auto hash_join_schema = hashjoin->output_schema();
+          std::string err_column_names;
+          for (const auto& name : dataset()->column_names_) {
+            int fieldIndex = hash_join_schema->GetFieldIndex(name);
+            if (-1 != fieldIndex) {
+              projections.push_back(cp::field_ref(fieldIndex));
+            } else {
+              err_column_names = err_column_names + " " + name;
+            }
+          }
+
+          if (err_column_names.length() != 0) {
+            res = errors::InvalidArgument(
+                "these column names don't exist after hash join: ",
+                err_column_names);
+            break;
+          }
+
+          auto project_result = cp::MakeExecNode(
+              "project", plan.get(), {hashjoin},
+              cp::ProjectNodeOptions{projections, dataset()->column_names_});
+          if (!project_result.ok()) {
+            res = errors::Internal("make project node failed: " +
+                                   project_result.status().ToString());
+            break;
+          }
+          auto project = project_result.ValueOrDie();
+
+          std::shared_ptr<arrow::Table> response_table;
+          auto table_sink_options = cp::TableSinkNodeOptions{&response_table};
+
+          auto sink_pre_node = project;
+
+          // filter node
+          if (!dataset()->filter_.empty()) {
+            auto filter_result = cp::MakeExecNode(
+                "filter", plan.get(), {project},
+                cp::FilterNodeOptions{dataset()->filter_expr_});
+            if (!filter_result.ok()) {
+              res = errors::Internal("make filter node failed: " +
+                                     filter_result.status().ToString());
+              break;
+            }
+            auto filter = filter_result.ValueOrDie();
+            sink_pre_node = filter;
+          }
+
+#if 0
+          auto sink_gen_result = cp::MakeExecNode(
+                "sink", plan.get(), {sink_pre_node}, cp::SinkNodeOptions{&sink_gen});
+            if (!sink_gen_result.ok()) {
+              res = errors::Internal("make sink gen node failed: " + sink_gen_result.status().ToString());
+              break;
+            }
+#endif
+          auto table_sink_gen_result = cp::MakeExecNode(
+              "table_sink", plan.get(), {sink_pre_node}, table_sink_options);
+          if (!table_sink_gen_result.ok()) {
+            res = errors::Internal("make table sink gen node failed: " +
+                                   table_sink_gen_result.status().ToString());
+          }
+
+#if 0
+          auto sink_reader = cp::MakeGeneratorReader(
+              sink_pre_node->output_schema(), std::move(sink_gen),
+              exec_context.memory_pool());
+
+#endif
+          // validate the Execplan
+          arrow_status = plan->Validate();
+          if (!arrow_status.ok()) {
+            res = errors::Internal("plan validate failed: " +
+                                   arrow_status.ToString());
+            break;
+          }
+
+          // start the Execplan
+          arrow_status = plan->StartProducing();
+          if (!arrow_status.ok()) {
+            res = errors::Internal("plan start producing failed: " +
+                                   arrow_status.ToString());
+            break;
+          }
+
+#if 0
+          auto response_table_result =
+              arrow::Table::FromRecordBatchReader(sink_reader.get());
+          if (!response_table_result.ok()) {
+            res = errors::Internal(response_table_result.status().ToString());
+            break;
+          }
+          auto response_table = response_table_result.ValueOrDie();
+#endif
+
+          // // stop producing
+          // plan->StopProducing();
+          // // plan mark finished
+          auto finished = plan->finished();
+          if (!finished.status().ok()) {
+            res = errors::Internal("paln finished failed: " +
+                                   finished.status().ToString());
+            break;
+          }
+
+          arrow::TableBatchReader tr(*response_table.get());
+          std::shared_ptr<arrow::RecordBatch> batch = nullptr;
+
+          // auto arrow_status = tr.ReadNext(&batch);
+          auto record_batchs_result = tr.ToRecordBatches();
+          if (!record_batchs_result.ok()) {
+            res = errors::Internal("response table ToRecordBatches failed: " +
+                                   record_batchs_result.status().ToString());
+            break;
+          }
+          if (background) {
+            next_record_batches_ = record_batchs_result.ValueOrDie();
+
+          } else {
+            record_batches_ = record_batchs_result.ValueOrDie();
+          }
+        } while (0);
+
+        if (background) {
+          mutex_lock lk(cv_mu_);
+          background_thread_finished_ = true;
+          background_res_ = res;
+          cv_.notify_all();
+        }
+
+        return res;
+      }
+
+      size_t current_file_idx_ TF_GUARDED_BY(mu_) = 0;
+      size_t current_batch_idx_ TF_GUARDED_BY(mu_) = 0;
+      std::vector<std::shared_ptr<arrow::RecordBatch>> record_batches_
+          TF_GUARDED_BY(mu_);
+      std::vector<std::shared_ptr<arrow::RecordBatch>> next_record_batches_
+          TF_GUARDED_BY(mu_);
+      std::shared_ptr<arrow::fs::S3FileSystem> s3fs_ TF_GUARDED_BY(mu_) =
+          nullptr;
+      std::vector<int> small_column_indices_ TF_GUARDED_BY(mu_);
+      std::vector<int> big_column_indices_ TF_GUARDED_BY(mu_);
+      std::vector<bool> column_names_exist_ TF_GUARDED_BY(mu_);
+      bool column_names_checked_ = false;
+      std::shared_ptr<BackgroundWorker> background_worker_ = nullptr;
+      mutex cv_mu_;
+      condition_variable cv_;
+      bool background_thread_finished_ = false;
+      Status background_res_ = Status::OK();
+    };
+
+    const std::string aws_access_key_;
+    const std::string aws_secret_key_;
+    const std::string aws_endpoint_override_;
+    const std::vector<std::string> small_table_files_;
+    const std::vector<std::string> big_table_files_;
+    const std::vector<std::string> column_names_;
+    const std::string filter_;
+    arrow::compute::Expression filter_expr_;
+  };
+};  // class ArrowV4DatasetOp
+
 REGISTER_KERNEL_BUILDER(Name("IO>ArrowZeroCopyDataset").Device(DEVICE_CPU),
                         ArrowZeroCopyDatasetOp);
 
@@ -1327,6 +1936,9 @@ REGISTER_KERNEL_BUILDER(Name("IO>ArrowStreamDataset").Device(DEVICE_CPU),
 
 REGISTER_KERNEL_BUILDER(Name("IO>ArrowS3Dataset").Device(DEVICE_CPU),
                         ArrowS3DatasetOp);
+
+REGISTER_KERNEL_BUILDER(Name("IO>ArrowV4Dataset").Device(DEVICE_CPU),
+                        ArrowV4DatasetOp);
 
 }  // namespace data
 }  // namespace tensorflow
