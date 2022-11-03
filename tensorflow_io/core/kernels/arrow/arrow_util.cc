@@ -15,9 +15,7 @@ limitations under the License.
 #include "tensorflow_io/core/kernels/arrow/arrow_util.h"
 
 #include "arrow/adapters/tensorflow/convert.h"
-#include "arrow/api.h"
-#include "arrow/ipc/api.h"
-#include "arrow/util/io_util.h"
+#include "arrow/compute/api.h"
 #include "tensorflow/core/framework/tensor.h"
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/lib/core/status.h"
@@ -488,6 +486,7 @@ Status ParseHost(std::string host, std::string* host_address,
 enum calType {
   CONSTANT,
   VARIABLE,
+  NULLVAL,
   ADD,
   SUBTRACT,
   MULTIPLY,
@@ -520,9 +519,11 @@ typedef struct Token {
       expression_ = arrow::compute::literal(value);
     }
   }
-  Token(calType type, std::string func) : type_(type), func_(func) {
+  Token(calType type, const std::string& value) : type_(type), func_(value) {
     if (type_ == calType::VARIABLE) {
-      expression_ = arrow::compute::field_ref(func_);
+      expression_ = arrow::compute::field_ref(value);
+    } else if (type_ == calType::CONSTANT) {
+      expression_ = arrow::compute::literal(value);
     }
   }
   calType type_;
@@ -541,8 +542,9 @@ typedef struct ASTNode {
 
 class Lexer {
  public:
+  Lexer() = delete;
   Lexer(const std::string& text)
-      : text_(text), position_(0), cur_op_(OPERATOR){};
+      : cur_op_(OPERATOR), position_(0), text_(text){};
   void skip_space() {
     while (position_ < text_.length() && text_[position_] == ' ') {
       position_++;
@@ -557,6 +559,16 @@ class Lexer {
       if ('.' == text_[position_] && ++decimal_points > 1) {
         return std::string{};
       }
+      position_++;
+    }
+    return text_.substr(start, position_ - start);
+  }
+
+  std::string get_str_constant() {
+    int start = position_;
+    while (position_ < text_.length() &&
+           (std::isalnum(text_[position_]) || '_' == text_[position_] ||
+            '-' == text_[position_])) {
       position_++;
     }
     return text_.substr(start, position_ - start);
@@ -612,9 +624,21 @@ class Lexer {
           return std::make_shared<Token>(calType::CONSTANT,
                                          std::stof(constant));
         }
+      } else if ('\'' == current_char || '\"' == current_char) {
+        cur_op_ = OPERAND;
+        std::string constant = get_str_constant();
+        if (constant.empty()) {
+          return nullptr;
+        }
+        return std::make_shared<Token>(calType::CONSTANT, constant);
       } else if (std::isalpha(current_char) || '_' == current_char) {
         cur_op_ = OPERAND;
-        return std::make_shared<Token>(calType::VARIABLE, get_variable());
+        std::string variable = get_variable();
+        if ("NULL" == variable || "null" == variable) {
+          cur_op_ = OPERATOR;
+          return std::make_shared<Token>(calType::NULLVAL, variable);
+        }
+        return std::make_shared<Token>(calType::VARIABLE, variable);
       } else if ('+' == current_char) {
         cur_op_ = OPERATOR;
         return std::make_shared<Token>(calType::ADD, "add");
@@ -685,7 +709,7 @@ class Lexer {
 
  private:
   OpType cur_op_;
-  int position_;
+  size_t position_;
   std::string text_;
 };
 
@@ -709,6 +733,9 @@ class Parser {
       update_current_token();
       return std::make_shared<ASTNode>(token, nullptr, nullptr);
     } else if (token->type_ == calType::VARIABLE) {
+      update_current_token();
+      return std::make_shared<ASTNode>(token, nullptr, nullptr);
+    } else if (token->type_ == calType::NULLVAL) {
       update_current_token();
       return std::make_shared<ASTNode>(token, nullptr, nullptr);
     } else if (token->type_ == calType::LPAREN) {
@@ -777,23 +804,58 @@ class Parser {
 class Interpreter {
  public:
   Interpreter(std::shared_ptr<Parser> parser) : parser_(parser) {}
-  arrow::compute::Expression visit(std::shared_ptr<ASTNode> root) {
+  Status visit(arrow::compute::Expression& expr,
+               std::shared_ptr<ASTNode> root) {
     auto rt = root->token_;
     auto rlt = root->left_->token_;
     auto rrt = root->right_->token_;
-    if (rlt->type_ != calType::CONSTANT && rlt->type_ != calType::VARIABLE) {
-      visit(root->left_);
+    if (rlt->type_ != calType::CONSTANT && rlt->type_ != calType::VARIABLE &&
+        rlt->type_ != calType::NULLVAL) {
+      TF_RETURN_IF_ERROR(visit(expr, root->left_));
     }
-    if (rrt->type_ != calType::CONSTANT && rrt->type_ != calType::VARIABLE) {
-      visit(root->right_);
+    if (rrt->type_ != calType::CONSTANT && rrt->type_ != calType::VARIABLE &&
+        rrt->type_ != calType::NULLVAL) {
+      TF_RETURN_IF_ERROR(visit(expr, root->right_));
+    }
+
+    // check expression
+    // The left type cannot equal the right type
+    if (rlt->type_ == rrt->type_ && rlt->type_ <= calType::NULLVAL &&
+        rrt->type_ <= calType::NULLVAL) {
+      return errors::InvalidArgument(
+          "Your filter expression isn't supported. The types on both sides of "
+          "an operator cannot be of the same type!");
     }
 
     if (rt->type_ >= calType::ADD && rt->type_ <= calType::OR) {
-      rt->expression_ =
-          arrow::compute::call(rt->func_, {rlt->expression_, rrt->expression_});
+      if (rlt->type_ == calType::NULLVAL || rrt->type_ == calType::NULLVAL) {
+        if (rt->type_ == calType::EQUAL) {
+          if (rlt->type_ != calType::NULLVAL) {
+            rt->expression_ =
+                arrow::compute::call("is_null", {rlt->expression_},
+                                     arrow::compute::NullOptions(true));
+          } else {
+            rt->expression_ =
+                arrow::compute::call("is_null", {rrt->expression_},
+                                     arrow::compute::NullOptions(true));
+          }
+        } else if (rt->type_ == calType::NOT_EQUAL) {
+          if (rlt->type_ != calType::NULLVAL) {
+            rt->expression_ =
+                arrow::compute::call("is_valid", {rlt->expression_});
+          } else {
+            rt->expression_ =
+                arrow::compute::call("is_valid", {rrt->expression_});
+          }
+        }
+      } else {
+        rt->expression_ = arrow::compute::call(
+            rt->func_, {rlt->expression_, rrt->expression_});
+      }
     }
     rt->type_ = calType::VARIABLE;
-    return rt->expression_;
+    expr = rt->expression_;
+    return Status::OK();
   }
 
   Status interpreter(std::shared_ptr<ASTNode>& ASTree) {
@@ -819,12 +881,8 @@ Status ParseExpression(const std::string& text,
   auto interpreter_ptr = std::make_shared<Interpreter>(parser_ptr);
 
   std::shared_ptr<ASTNode> ASTree;
-  auto status = interpreter_ptr->interpreter(ASTree);
-  if (!status.ok()) {
-    return status;
-  }
-
-  expr = interpreter_ptr->visit(ASTree);
+  TF_RETURN_IF_ERROR(interpreter_ptr->interpreter(ASTree));
+  TF_RETURN_IF_ERROR(interpreter_ptr->visit(expr, ASTree));
   return Status::OK();
 }
 
