@@ -468,9 +468,9 @@ Status ParseHost(std::string host, std::string* host_address,
 }
 
 enum calType {
+  NULLVAL,
   CONSTANT,
   VARIABLE,
-  NULLVAL,
   ADD,
   SUBTRACT,
   MULTIPLY,
@@ -550,12 +550,12 @@ class Lexer {
 
   std::string get_str_constant() {
     int start = position_;
-    while (position_ < text_.length() &&
-           (std::isalnum(text_[position_]) || '_' == text_[position_] ||
-            '-' == text_[position_])) {
+    while (position_ < text_.length() && text_[position_] != '\"' &&
+           text_[position_] != '\'') {
       position_++;
     }
-    return text_.substr(start, position_ - start);
+    position_++;
+    return text_.substr(start, position_ - 1 - start);
   }
 
   calType get_comparison_type() {
@@ -803,12 +803,9 @@ class Interpreter {
     }
 
     // check expression
-    // The left type cannot equal the right type
-    if (rlt->type_ == rrt->type_ && rlt->type_ <= calType::NULLVAL &&
-        rrt->type_ <= calType::NULLVAL) {
+    if (rlt->type_ <= calType::CONSTANT && rrt->type_ <= calType::CONSTANT) {
       return errors::InvalidArgument(
-          "Your filter expression isn't supported. The types on both sides of "
-          "an operator cannot be of the same type!");
+          "Your filter expression isn't supported, check it!");
     }
 
     if (rt->type_ >= calType::ADD && rt->type_ <= calType::OR) {
