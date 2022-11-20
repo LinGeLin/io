@@ -651,16 +651,16 @@ class ArrowStreamDataset(ArrowBaseDataset):
         )
 
 
-class ArrowS3Dataset(ArrowBaseDataset):
+class ArrowRadosDataset(ArrowBaseDataset):
     """An Arrow Dataset for reading record batches from an input stream.
     Currently supported input streams are a socket client or stdin.
     """
 
     def __init__(
         self,
-        aws_access_key,
-        aws_secret_key,
-        aws_endpoint_override,
+        rados_id,
+        rados_keyring,
+        rados_mon_host,
         parquet_files,
         column_names,
         columns,
@@ -674,9 +674,9 @@ class ArrowS3Dataset(ArrowBaseDataset):
         """Create an ArrowDataset from an input stream.
 
         Args:
-            aws_access_key: S3 access key
-            aws_secret_key: S3 secret key
-            aws_endpoint_override: S3 endpoint override
+            rados_id: rados id
+            rados_keyring: rados keyring
+            rados_mon_host: rados mon host
             parquet_files: A list of parquet files path on s3
             column_names: A list of column names to be used in the dataset
             columns: A list of column indices to be used in the Dataset
@@ -694,14 +694,14 @@ class ArrowS3Dataset(ArrowBaseDataset):
             filter : filter for reade row
             same_schema : Whether the input files have the same view（default true）
         """
-        aws_access_key = tf.convert_to_tensor(
-            aws_access_key, dtype=dtypes.string, name="aws_access_key"
+        rados_id = tf.convert_to_tensor(
+            rados_id, dtype=dtypes.string, name="rados_id"
         )
-        aws_secret_key = tf.convert_to_tensor(
-            aws_secret_key, dtype=dtypes.string, name="aws_secret_key"
+        rados_keyring = tf.convert_to_tensor(
+            rados_keyring, dtype=dtypes.string, name="rados_keyring"
         )
-        aws_endpoint_override = tf.convert_to_tensor(
-            aws_endpoint_override, dtype=dtypes.string, name="aws_endpoint_override"
+        rados_mon_host = tf.convert_to_tensor(
+            rados_mon_host, dtype=dtypes.string, name="rados_mon_host"
         )
         parquet_files = tf.convert_to_tensor(
             parquet_files, dtype=dtypes.string, name="parquet_files"
@@ -715,10 +715,10 @@ class ArrowS3Dataset(ArrowBaseDataset):
         )
         super().__init__(
             partial(
-                core_ops.io_arrow_s3_dataset,
-                aws_access_key,
-                aws_secret_key,
-                aws_endpoint_override,
+                core_ops.io_arrow_rados_dataset,
+                rados_id,
+                rados_keyring,
+                rados_mon_host,
                 parquet_files,
                 column_names,
                 filter,

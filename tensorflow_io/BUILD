@@ -9,6 +9,7 @@ cc_binary(
     name = "python/ops/libtensorflow_io.so",
     copts = tf_io_copts(),
     linkshared = 1,
+    linkopts = ["-l/usr/lib/x86_64-linux-gnu/librados.so"],
     deps = [
         "//tensorflow_io/core:arrow_ops",
         "//tensorflow_io/core:bigquery_ops",

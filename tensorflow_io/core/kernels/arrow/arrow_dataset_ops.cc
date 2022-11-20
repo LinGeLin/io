@@ -28,6 +28,7 @@ limitations under the License.
 #include "tensorflow_io/core/kernels/arrow/arrow_stream_client.h"
 #include "tensorflow_io/core/kernels/arrow/arrow_util.h"
 #include "tensorflow_io/core/kernels/io_stream.h"
+#include "rados_random_access_file.h"
 
 namespace tensorflow {
 namespace data {
@@ -945,9 +946,9 @@ class ArrowStreamDatasetOp : public ArrowOpKernelBase {
   };
 };
 
-class ArrowS3DatasetOp : public ArrowOpKernelBase {
+class ArrowRadosDatasetOp : public ArrowOpKernelBase {
  public:
-  explicit ArrowS3DatasetOp(OpKernelConstruction* ctx)
+  explicit ArrowRadosDatasetOp(OpKernelConstruction* ctx)
       : ArrowOpKernelBase(ctx) {}
 
   virtual void MakeArrowDataset(
@@ -956,18 +957,18 @@ class ArrowS3DatasetOp : public ArrowOpKernelBase {
       const DataTypeVector& output_types,
       const std::vector<PartialTensorShape>& output_shapes,
       ArrowDatasetBase** output) override {
-    tstring aws_access_key;
-    OP_REQUIRES_OK(ctx, ParseScalarArgument<tstring>(ctx, "aws_access_key",
-                                                     &aws_access_key));
+    tstring rados_id;
+    OP_REQUIRES_OK(ctx, ParseScalarArgument<tstring>(ctx, "rados_id",
+                                                     &rados_id));
 
-    tstring aws_secret_key;
-    OP_REQUIRES_OK(ctx, ParseScalarArgument<tstring>(ctx, "aws_secret_key",
-                                                     &aws_secret_key));
+    tstring rados_keyring;
+    OP_REQUIRES_OK(ctx, ParseScalarArgument<tstring>(ctx, "rados_keyring",
+                                                     &rados_keyring));
 
-    tstring aws_endpoint_override;
+    tstring rados_mon_host;
     OP_REQUIRES_OK(ctx,
-                   ParseScalarArgument<tstring>(ctx, "aws_endpoint_override",
-                                                &aws_endpoint_override));
+                   ParseScalarArgument<tstring>(ctx, "rados_mon_host",
+                                                &rados_mon_host));
 
     const Tensor* parquet_files_tensor;
     OP_REQUIRES_OK(ctx, ctx->input("parquet_files", &parquet_files_tensor));
@@ -1000,8 +1001,8 @@ class ArrowS3DatasetOp : public ArrowOpKernelBase {
     bool same_schema = true;
     OP_REQUIRES_OK(
         ctx, data::ParseScalarArgument<bool>(ctx, "same_schema", &same_schema));
-    *output = new Dataset(ctx, aws_access_key, aws_secret_key,
-                          aws_endpoint_override, parquet_files, column_names,
+    *output = new Dataset(ctx, rados_id, rados_keyring,
+                          rados_mon_host, parquet_files, column_names,
                           filter, same_schema, column_cols, batch_size,
                           batch_mode, output_types_, output_shapes_);
   }
@@ -1009,9 +1010,9 @@ class ArrowS3DatasetOp : public ArrowOpKernelBase {
  private:
   class Dataset : public ArrowDatasetBase {
    public:
-    Dataset(OpKernelContext* ctx, const std::string& aws_access_key,
-            const std::string& aws_secret_key,
-            const std::string& aws_endpoint_override,
+    Dataset(OpKernelContext* ctx, const std::string& rados_id,
+            const std::string& rados_keyring,
+            const std::string& rados_mon_host,
             const std::vector<std::string>& parquet_files,
             const std::vector<std::string>& column_names,
             const std::string& filter, const bool same_schema,
@@ -1020,15 +1021,15 @@ class ArrowS3DatasetOp : public ArrowOpKernelBase {
             const std::vector<PartialTensorShape>& output_shapes)
         : ArrowDatasetBase(ctx, columns, batch_size, batch_mode, output_types,
                            output_shapes),
-          aws_access_key_(aws_access_key),
-          aws_secret_key_(aws_secret_key),
-          aws_endpoint_override_(aws_endpoint_override),
+          rados_id_(rados_id),
+          rados_keyring_(rados_keyring),
+          rados_mon_host_(rados_mon_host),
           parquet_files_(parquet_files),
           column_names_(column_names),
           filter_(filter),
           same_schema_(same_schema) {}
 
-    string DebugString() const override { return "ArrowS3DatasetOp::Dataset"; }
+    string DebugString() const override { return "ArrowRadosDatasetOp::Dataset"; }
     Status InputDatasets(std::vector<const DatasetBase*>* inputs) const {
       return Status::OK();
     }
@@ -1038,16 +1039,16 @@ class ArrowS3DatasetOp : public ArrowOpKernelBase {
     Status AsGraphDefInternal(SerializationContext* ctx,
                               DatasetGraphDefBuilder* b,
                               Node** output) const override {
-      Node* aws_access_key = nullptr;
-      tstring access_key = aws_access_key_;
-      TF_RETURN_IF_ERROR(b->AddScalar(access_key, &aws_access_key));
-      Node* aws_secret_key = nullptr;
-      tstring secret_key = aws_secret_key_;
-      TF_RETURN_IF_ERROR(b->AddScalar(secret_key, &aws_secret_key));
-      Node* aws_endpoint_override = nullptr;
-      tstring endpoint_override = aws_endpoint_override_;
+      Node* rados_id = nullptr;
+      tstring id = rados_id_;
+      TF_RETURN_IF_ERROR(b->AddScalar(id, &rados_id));
+      Node* rados_keyring = nullptr;
+      tstring keyring = rados_keyring_;
+      TF_RETURN_IF_ERROR(b->AddScalar(keyring, &rados_keyring));
+      Node* rados_mon_host = nullptr;
+      tstring mon_host = rados_mon_host_;
       TF_RETURN_IF_ERROR(
-          b->AddScalar(endpoint_override, &aws_endpoint_override));
+          b->AddScalar(mon_host, &rados_mon_host));
       Node* parquet_files = nullptr;
       TF_RETURN_IF_ERROR(b->AddVector(parquet_files_, &parquet_files));
       Node* column_names = nullptr;
@@ -1067,7 +1068,7 @@ class ArrowS3DatasetOp : public ArrowOpKernelBase {
       TF_RETURN_IF_ERROR(b->AddScalar(batch_mode_str, &batch_mode));
       TF_RETURN_IF_ERROR(b->AddDataset(
           this,
-          {aws_access_key, aws_secret_key, aws_endpoint_override, parquet_files,
+          {rados_id, rados_keyring, rados_mon_host, parquet_files,
            column_names, filter, same_schema, columns, batch_size, batch_mode},
           output));
       return Status::OK();
@@ -1088,12 +1089,11 @@ class ArrowS3DatasetOp : public ArrowOpKernelBase {
      private:
       Status SetupStreamsLocked(Env* env)
           TF_EXCLUSIVE_LOCKS_REQUIRED(mu_) override {
-        if (!s3fs_) {
-          arrow::fs::EnsureS3Initialized();
-          auto s3Options = arrow::fs::S3Options::FromAccessKey(
-              dataset()->aws_access_key_, dataset()->aws_secret_key_);
-          s3Options.endpoint_override = dataset()->aws_endpoint_override_;
-          s3fs_ = arrow::fs::S3FileSystem::Make(s3Options).ValueOrDie();
+        if (!radosfs_) {
+          auto radosOptions = RadosOptions(dataset()->rados_id_, 
+                                           dataset()->rados_keyring_, 
+                                           dataset()->rados_mon_host_);
+          radosfs_ = RadosFileSystem::Make(radosOptions).ValueOrDie();
         }
 
         auto filter_expr_ptr =
@@ -1183,7 +1183,7 @@ class ArrowS3DatasetOp : public ArrowOpKernelBase {
         Status res = Status::OK();
         do {
           auto access_file_result =
-              s3fs_->OpenInputFile(dataset()->parquet_files_[file_index]);
+              radosfs_->OpenInputFile(dataset()->parquet_files_[file_index]);
           if (!access_file_result.ok()) {
             res =
                 errors::InvalidArgument(access_file_result.status().ToString());
@@ -1301,7 +1301,7 @@ class ArrowS3DatasetOp : public ArrowOpKernelBase {
           TF_GUARDED_BY(mu_);
       std::vector<std::shared_ptr<arrow::RecordBatch>> next_record_batches_
           TF_GUARDED_BY(mu_);
-      std::shared_ptr<arrow::fs::S3FileSystem> s3fs_ TF_GUARDED_BY(mu_) =
+      std::shared_ptr<RadosFileSystem> radosfs_ TF_GUARDED_BY(mu_) =
           nullptr;
       std::vector<int> column_indices_ TF_GUARDED_BY(mu_);
       std::shared_ptr<BackgroundWorker> background_worker_ = nullptr;
@@ -1311,16 +1311,16 @@ class ArrowS3DatasetOp : public ArrowOpKernelBase {
       Status background_res_ = Status::OK();
     };
 
-    const std::string aws_access_key_;
-    const std::string aws_secret_key_;
-    const std::string aws_endpoint_override_;
+    const std::string rados_id_;
+    const std::string rados_keyring_;
+    const std::string rados_mon_host_;
     const std::vector<std::string> parquet_files_;
     const std::vector<std::string> column_names_;
     const std::string filter_;
     const bool same_schema_;
     arrow::compute::Expression filter_expr_;
   };
-};  // class ArrowS3DatasetOp
+};  // class ArrowRadosDatasetOp
 
 REGISTER_KERNEL_BUILDER(Name("IO>ArrowZeroCopyDataset").Device(DEVICE_CPU),
                         ArrowZeroCopyDatasetOp);
@@ -1334,8 +1334,8 @@ REGISTER_KERNEL_BUILDER(Name("IO>ArrowFeatherDataset").Device(DEVICE_CPU),
 REGISTER_KERNEL_BUILDER(Name("IO>ArrowStreamDataset").Device(DEVICE_CPU),
                         ArrowStreamDatasetOp);
 
-REGISTER_KERNEL_BUILDER(Name("IO>ArrowS3Dataset").Device(DEVICE_CPU),
-                        ArrowS3DatasetOp);
+REGISTER_KERNEL_BUILDER(Name("IO>ArrowRadosDataset").Device(DEVICE_CPU),
+                        ArrowRadosDatasetOp);
 
 }  // namespace data
 }  // namespace tensorflow

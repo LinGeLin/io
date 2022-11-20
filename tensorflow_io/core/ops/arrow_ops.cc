@@ -188,10 +188,10 @@ REGISTER_OP("IO>ArrowReadableRead")
       return Status::OK();
     });
 
-REGISTER_OP("IO>ArrowS3Dataset")
-    .Input("aws_access_key: string")
-    .Input("aws_secret_key: string")
-    .Input("aws_endpoint_override: string")
+REGISTER_OP("IO>ArrowRadosDataset")
+    .Input("rados_id: string")
+    .Input("rados_keyring: string")
+    .Input("rados_mon_host: string")
     .Input("parquet_files: string")
     .Input("column_names: string")
     .Input("filter: string")
@@ -205,11 +205,11 @@ REGISTER_OP("IO>ArrowS3Dataset")
     .SetIsStateful()
     .SetShapeFn(shape_inference::ScalarShape)
     .Doc(R"doc(
-Creates a dataset from s3 parqeut files
+Creates a dataset from rados parqeut files
 
-aws_access_key: S3 access key.
-aws_secret_key: S3 secret_key.
-aws_endpoint_override: S3 endpoint override
+rados_id: rados id.
+rados_keyring: rados keyring.
+rados_mon_host: rados mon host.
 parquet_files: One or more parqeut file path on s3
 column_names: Select columns to read by names
 )doc");

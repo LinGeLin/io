@@ -16,6 +16,7 @@ limitations under the License.
 #ifndef TENSORFLOW_IO_CORE_KERNELS_ARROW_UTIL_H_
 #define TENSORFLOW_IO_CORE_KERNELS_ARROW_UTIL_H_
 
+#include "librados.h"
 #include "arrow/api.h"
 #include "arrow/dataset/dataset.h"
 #include "arrow/dataset/file_parquet.h"

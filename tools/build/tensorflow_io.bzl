@@ -23,6 +23,8 @@ def tf_io_copts():
             "//conditions:default": [
                 "-DNDEBUG",
                 "-pthread",
+                "-L/usr/lib/x86_64-linux-gnu/",
+                "-lrados",
             ],
         })
     )

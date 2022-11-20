@@ -117,6 +117,8 @@ cc_library(
         "kernels/arrow/arrow_kernels.cc",
         "kernels/arrow/arrow_kernels.h",
         "kernels/arrow/arrow_stream_client.h",
+        "kernels/arrow/rados_random_access_file.h",
+        "kernels/arrow/rados_random_access_file.cc",
         "ops/arrow_ops.cc",
     ] + select({
         "@bazel_tools//src/conditions:windows": [
