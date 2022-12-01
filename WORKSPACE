@@ -6,6 +6,7 @@ load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 http_archive(
     name = "zlib",
     build_file = "//third_party:zlib.BUILD",
+    patch_cmds = ["""sed -i.bak '29i\\'$'\\n#include<zconf.h>\\n' contrib/minizip/crypt.h"""],
     sha256 = "c3e5e9fdd5004dcb542feda5ee4f0ff0744628baf8ed2dd5d66f8ca1197cb1a1",
     strip_prefix = "zlib-1.2.11",
     urls = [
@@ -196,16 +197,12 @@ http_archive(
 http_archive(
     name = "arrow",
     build_file = "//third_party:arrow.BUILD",
-    patch_cmds = [
-        # TODO: Remove the fowllowing once arrow issue is resolved.
-        """sed -i.bak 's/type_traits/std::max<int16_t>(sizeof(int16_t), type_traits/g' cpp/src/parquet/column_reader.cc""",
-        """sed -i.bak 's/value_byte_size/value_byte_size)/g' cpp/src/parquet/column_reader.cc""",
-    ],
-    sha256 = "a27971e2a71c412ae43d998b7b6d06201c7a3da382c804dcdc4a8126ccbabe67",
-    strip_prefix = "arrow-apache-arrow-4.0.0",
+    patch_cmds = ["""sed -i.bak '24i\\'$'\\n#undef ARROW_WITH_OPENTELEMETRY\\n' cpp/src/arrow/util/tracing_internal.h"""],
+    sha256 = "19ece12de48e51ce4287d2dee00dc358fbc5ff02f41629d16076f77b8579e272",
+    strip_prefix = "arrow-apache-arrow-8.0.0",
     urls = [
-        "https://storage.googleapis.com/mirror.tensorflow.org/github.com/apache/arrow/archive/apache-arrow-4.0.0.tar.gz",
-        "https://github.com/apache/arrow/archive/apache-arrow-4.0.0.tar.gz",
+        "https://storage.googleapis.com/mirror.tensorflow.org/github.com/apache/arrow/archive/apache-arrow-8.0.0.tar.gz",
+        "https://github.com/apache/arrow/archive/apache-arrow-8.0.0.tar.gz",
     ],
 )
 
@@ -409,11 +406,11 @@ http_archive(
 http_archive(
     name = "hadoop",
     build_file = "//third_party:hadoop.BUILD",
-    sha256 = "5fd5831b12b1e0999bd352d6cca11ef80f883c81ffa898e53c68d8fe8d170e9f",
-    strip_prefix = "hadoop-3.3.0-src",
+    sha256 = "fa9d0587d06c36838e778081bcf8271a9c63060af00b3bf456423c1777a62043",
+    strip_prefix = "hadoop-rel-release-3.3.0",
     urls = [
-        "https://storage.googleapis.com/mirror.tensorflow.org/downloads.apache.org/hadoop/common/hadoop-3.3.0/hadoop-3.3.0-src.tar.gz",
-        "https://downloads.apache.org/hadoop/common/hadoop-3.3.0/hadoop-3.3.0-src.tar.gz",
+        "https://storage.googleapis.com/mirror.tensorflow.org/apache/hadoop/archive/refs/tags/rel/release-3.3.0.tar.gz",
+        "https://github.com/apache/hadoop/archive/refs/tags/rel/release-3.3.0.tar.gz",
     ],
 )
 
@@ -477,7 +474,7 @@ http_archive(
     patches = [
         "//third_party:libaprutil1.patch",
     ],
-    sha256 = "4c9ae319cedc16890fc2776920e7d529672dda9c3a9a9abd53bd80c2071b39af",
+    sha256 = "1e4299da5a3eca49cc3acab60600d0d7c0cda2de46d662ca14fadf5ab68a8c4f",
     strip_prefix = "apr-util-1.6.1",
     urls = [
         "https://storage.googleapis.com/mirror.tensorflow.org/github.com/apache/apr-util/archive/1.6.1.tar.gz",
