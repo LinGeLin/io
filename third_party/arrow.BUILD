@@ -35,6 +35,7 @@ genrule(
            "-e 's/@ARROW_VERSION_MINOR@/0/g' " +
            "-e 's/@ARROW_VERSION_PATCH@/0/g' " +
            "-e 's/cmakedefine ARROW_USE_NATIVE_INT128/undef ARROW_USE_NATIVE_INT128/g' " +
+           "-e 's/cmakedefine ARROW_WITH_OPENTELEMETRY/undef ARROW_WITH_OPENTELEMETRY/g' " +
            "-e 's/cmakedefine/define/g' " +
            "$< >$@"),
 )
