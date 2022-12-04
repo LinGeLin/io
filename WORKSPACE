@@ -158,6 +158,10 @@ http_archive(
 http_archive(
     name = "arrow",
     build_file = "//third_party:arrow.BUILD",
+    patch_cmds = [
+        """sed -i.bak '700i\\'$'\\n    client_config_.connectTimeoutMs = 3 * 1000;\\n' cpp/src/arrow/filesystem/s3fs.cc""",
+        """sed -i.bak '701i\\'$'\\n    client_config_.requestTimeoutMs = 9 * 1000;\\n' cpp/src/arrow/filesystem/s3fs.cc""",
+    ],
     sha256 = "19ece12de48e51ce4287d2dee00dc358fbc5ff02f41629d16076f77b8579e272",
     strip_prefix = "arrow-apache-arrow-8.0.0",
     urls = [
