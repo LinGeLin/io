@@ -21,5 +21,9 @@ cc_library(
     deps = [
         "//tensorflow_io/core:dataset_ops",
         "@nucleus//:fastq_reader",
+        "@com_google_absl//absl/types:span",
+        "@com_google_absl//absl/types:optional",
+        "@com_google_absl//absl/algorithm",
+        "@com_google_absl//absl/container:inlined_vector",
     ],
 )

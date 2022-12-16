@@ -370,7 +370,7 @@ http_archive(
     patches = [
         "//third_party:libapr1.patch",
     ],
-    sha256 = "1a0909a1146a214a6ab9de28902045461901baab4e0ee43797539ec05b6dbae0",
+    sha256 = "096968a363b2374f7450a3c65f3cc0b50561204a8da7bc03a2c39e080febd6e1",
     strip_prefix = "apr-1.6.5",
     urls = [
         "https://github.com/apache/apr/archive/1.6.5.tar.gz",
@@ -384,7 +384,7 @@ http_archive(
     patches = [
         "//third_party:libaprutil1.patch",
     ],
-    sha256 = "4c9ae319cedc16890fc2776920e7d529672dda9c3a9a9abd53bd80c2071b39af",
+    sha256 = "1e4299da5a3eca49cc3acab60600d0d7c0cda2de46d662ca14fadf5ab68a8c4f",
     strip_prefix = "apr-util-1.6.1",
     urls = [
         "https://github.com/apache/apr-util/archive/1.6.1.tar.gz",
