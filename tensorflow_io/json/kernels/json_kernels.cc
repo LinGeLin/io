@@ -26,6 +26,7 @@ limitations under the License.
 #include "arrow/json/reader.h"
 #include "arrow/table.h"
 #include "tensorflow_io/arrow/kernels/arrow_kernels.h"
+#include "tensorflow_io/arrow/kernels/arrow_util.h"
 #include "rapidjson/document.h"
 
 namespace tensorflow {
@@ -275,13 +276,20 @@ class JSONReadable : public IOReadableInterface {
 
     ::arrow::Status status;
 
-    status = ::arrow::json::TableReader::Make(::arrow::default_memory_pool(), json_file_, ::arrow::json::ReadOptions::Defaults(), ::arrow::json::ParseOptions::Defaults(), &reader_);
-    if (!status.ok()) {
+    auto reader_result = ::arrow::json::TableReader::Make(
+        ::arrow::default_memory_pool(), json_file_,
+        ::arrow::json::ReadOptions::Defaults(),
+        ::arrow::json::ParseOptions::Defaults());
+    if (!reader_result.ok()) {
       return errors::InvalidArgument("unable to make a TableReader: ", status);
+    } else {
+      reader_ = reader_result.ValueOrDie();
     }
-    status = reader_->Read(&table_);
-    if (!status.ok()) {
+    auto table_result = reader_->Read();
+    if (!table_result.ok()) {
       return errors::InvalidArgument("unable to read table: ", status);
+    } else {
+      table_ = table_result.ValueOrDie();
     }
 
     shapes_.clear();
@@ -290,10 +298,11 @@ class JSONReadable : public IOReadableInterface {
     for (int i = 0; i < table_->num_columns(); i++) {
       shapes_.push_back(TensorShape({static_cast<int64>(table_->num_rows())}));
       ::tensorflow::DataType dtype;
-      TF_RETURN_IF_ERROR(GetTensorFlowType(table_->column(i)->type(), &dtype));
+      TF_RETURN_IF_ERROR(
+          ArrowUtil::GetTensorFlowType(table_->column(i)->type(), &dtype));
       dtypes_.push_back(dtype);
-      columns_.push_back(table_->column(i)->name());
-      columns_index_[table_->column(i)->name()] = i;
+      columns_.push_back(table_->ColumnNames()[i]);
+      columns_index_[table_->ColumnNames()[i]] = i;
     }
 
     return Status::OK();
@@ -349,53 +358,56 @@ class JSONReadable : public IOReadableInterface {
       return Status::OK();
     }
 
-    std::shared_ptr<::arrow::Column> slice = table_->column(column_index)->Slice(element_start, element_stop);
+    std::shared_ptr<::arrow::ChunkedArray> slice = table_->column(column_index)->Slice(element_start, element_stop);
 
-    #define PROCESS_TYPE(TTYPE,ATYPE) { \
-        int64 curr_index = 0; \
-        for (auto chunk : slice->data()->chunks()) { \
-          for (int64_t item = 0; item < chunk->length(); item++) { \
-            value->flat<TTYPE>()(curr_index) = (dynamic_cast<ATYPE *>(chunk.get()))->Value(item); \
-            curr_index++; \
-          } \
-        } \
-      }
+#define PROCESS_TYPE(TTYPE, ATYPE)                             \
+  {                                                            \
+    int64 curr_index = 0;                                      \
+    for (auto chunk : slice->chunks()) {                       \
+      for (int64_t item = 0; item < chunk->length(); item++) { \
+        value->flat<TTYPE>()(curr_index) =                     \
+            (dynamic_cast<ATYPE*>(chunk.get()))->Value(item);  \
+        curr_index++;                                          \
+      }                                                        \
+    }                                                          \
+  }
     switch (value->dtype()) {
-    case DT_BOOL:
-      PROCESS_TYPE(bool, ::arrow::BooleanArray);
-      break;
-    case DT_INT8:
-      PROCESS_TYPE(int8, ::arrow::NumericArray<::arrow::Int8Type>);
-      break;
-    case DT_UINT8:
-      PROCESS_TYPE(uint8, ::arrow::NumericArray<::arrow::UInt8Type>);
-      break;
-    case DT_INT16:
-      PROCESS_TYPE(int16, ::arrow::NumericArray<::arrow::Int16Type>);
-      break;
-    case DT_UINT16:
-      PROCESS_TYPE(uint16, ::arrow::NumericArray<::arrow::UInt16Type>);
-      break;
-    case DT_INT32:
-      PROCESS_TYPE(int32, ::arrow::NumericArray<::arrow::Int32Type>);
-      break;
-    case DT_UINT32:
-      PROCESS_TYPE(uint32, ::arrow::NumericArray<::arrow::UInt32Type>);
-      break;
-    case DT_INT64:
-      PROCESS_TYPE(int64, ::arrow::NumericArray<::arrow::Int64Type>);
-      break;
-    case DT_UINT64:
-      PROCESS_TYPE(uint64, ::arrow::NumericArray<::arrow::UInt64Type>);
-      break;
-    case DT_FLOAT:
-      PROCESS_TYPE(float, ::arrow::NumericArray<::arrow::FloatType>);
-      break;
-    case DT_DOUBLE:
-      PROCESS_TYPE(double, ::arrow::NumericArray<::arrow::DoubleType>);
-      break;
-    default:
-      return errors::InvalidArgument("data type is not supported: ", DataTypeString(value->dtype()));
+      case DT_BOOL:
+        PROCESS_TYPE(bool, ::arrow::BooleanArray);
+        break;
+      case DT_INT8:
+        PROCESS_TYPE(int8, ::arrow::NumericArray<::arrow::Int8Type>);
+        break;
+      case DT_UINT8:
+        PROCESS_TYPE(uint8, ::arrow::NumericArray<::arrow::UInt8Type>);
+        break;
+      case DT_INT16:
+        PROCESS_TYPE(int16, ::arrow::NumericArray<::arrow::Int16Type>);
+        break;
+      case DT_UINT16:
+        PROCESS_TYPE(uint16, ::arrow::NumericArray<::arrow::UInt16Type>);
+        break;
+      case DT_INT32:
+        PROCESS_TYPE(int32, ::arrow::NumericArray<::arrow::Int32Type>);
+        break;
+      case DT_UINT32:
+        PROCESS_TYPE(uint32, ::arrow::NumericArray<::arrow::UInt32Type>);
+        break;
+      case DT_INT64:
+        PROCESS_TYPE(int64, ::arrow::NumericArray<::arrow::Int64Type>);
+        break;
+      case DT_UINT64:
+        PROCESS_TYPE(uint64, ::arrow::NumericArray<::arrow::UInt64Type>);
+        break;
+      case DT_FLOAT:
+        PROCESS_TYPE(float, ::arrow::NumericArray<::arrow::FloatType>);
+        break;
+      case DT_DOUBLE:
+        PROCESS_TYPE(double, ::arrow::NumericArray<::arrow::DoubleType>);
+        break;
+      default:
+        return errors::InvalidArgument("data type is not supported: ",
+                                       DataTypeString(value->dtype()));
     }
     (*record_read) = element_stop - element_start;
     return Status::OK();

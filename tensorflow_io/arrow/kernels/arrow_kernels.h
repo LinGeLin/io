@@ -13,92 +13,86 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#ifndef TENSORFLOW_IO_ARROW_KERNELS_H_
-#define TENSORFLOW_IO_ARROW_KERNELS_H_
+#ifndef TENSORFLOW_IO_CORE_KERNELS_ARROW_KERNELS_H_
+#define TENSORFLOW_IO_CORE_KERNELS_ARROW_KERNELS_H_
 
-#include "tensorflow_io/core/kernels/io_stream.h"
-#include "arrow/io/api.h"
 #include "arrow/buffer.h"
+#include "arrow/io/api.h"
 #include "arrow/type.h"
+#include "parquet/windows_compatibility.h"
+#include "tensorflow/core/framework/op_kernel.h"
+#include "tensorflow_io/core/kernels/io_stream.h"
 
 namespace tensorflow {
 namespace data {
-
-Status GetTensorFlowType(std::shared_ptr<::arrow::DataType> dtype, ::tensorflow::DataType* out);
-Status GetArrowType(::tensorflow::DataType dtype, std::shared_ptr<::arrow::DataType>* out);
 
 // NOTE: Both SizedRandomAccessFile and ArrowRandomAccessFile overlap
 // with another PR. Will remove duplicate once PR merged
 
 class ArrowRandomAccessFile : public ::arrow::io::RandomAccessFile {
-public:
-  explicit ArrowRandomAccessFile(tensorflow::RandomAccessFile *file, int64 size)
-    : file_(file)
-    , size_(size)
-    , position_(0) { }
+ public:
+  explicit ArrowRandomAccessFile(tensorflow::RandomAccessFile* file, int64 size)
+      : file_(file), size_(size), position_(0) {}
 
   ~ArrowRandomAccessFile() {}
-  arrow::Status Close() override {
-    return arrow::Status::OK();
-  }
-  bool closed() const override {
-    return false;
-  }
-  arrow::Status Tell(int64_t* position) const override {
-    *position = position_;
-    return arrow::Status::OK();
-  }
+  arrow::Status Close() override { return arrow::Status::OK(); }
+  bool closed() const override { return false; }
+  arrow::Result<int64_t> Tell() const override { return position_; }
   arrow::Status Seek(int64_t position) override {
     return arrow::Status::NotImplemented("Seek");
   }
-  arrow::Status Read(int64_t nbytes, int64_t* bytes_read, void* out) override {
+  arrow::Result<int64_t> Read(int64_t nbytes, void* out) override {
     StringPiece result;
     Status status = file_->Read(position_, nbytes, &result, (char*)out);
     if (!(status.ok() || errors::IsOutOfRange(status))) {
-        return arrow::Status::IOError(status.error_message());
+      return arrow::Status::IOError(status.error_message());
     }
-    *bytes_read = result.size();
-    position_ += (*bytes_read);
-    return arrow::Status::OK();
+    position_ += result.size();
+    return result.size();
   }
-  arrow::Status Read(int64_t nbytes, std::shared_ptr<arrow::Buffer>* out) override {
-    return arrow::Status::NotImplemented("Read (Buffer*)");
+  arrow::Result<std::shared_ptr<arrow::Buffer>> Read(int64_t nbytes) override {
+    arrow::Result<std::shared_ptr<arrow::ResizableBuffer>> result =
+        arrow::AllocateResizableBuffer(nbytes);
+    ARROW_RETURN_NOT_OK(result);
+    std::shared_ptr<arrow::ResizableBuffer> buffer =
+        std::move(result).ValueUnsafe();
+
+    ARROW_ASSIGN_OR_RAISE(int64_t bytes_read,
+                          Read(nbytes, buffer->mutable_data()));
+    RETURN_NOT_OK(buffer->Resize(bytes_read));
+    return buffer;
   }
-  arrow::Status GetSize(int64_t* size) override {
-    *size = size_;
-    return arrow::Status::OK();
-  }
-  bool supports_zero_copy() const override {
-    return false;
-  }
-  arrow::Status ReadAt(int64_t position, int64_t nbytes, int64_t* bytes_read, void* out) override {
+  arrow::Result<int64_t> GetSize() override { return size_; }
+  bool supports_zero_copy() const override { return false; }
+  arrow::Result<int64_t> ReadAt(int64_t position, int64_t nbytes,
+                                void* out) override {
     StringPiece result;
     Status status = file_->Read(position, nbytes, &result, (char*)out);
     if (!(status.ok() || errors::IsOutOfRange(status))) {
-        return arrow::Status::IOError(status.error_message());
+      return arrow::Status::IOError(status.error_message());
     }
-    *bytes_read = result.size();
-    return arrow::Status::OK();
+    return result.size();
   }
-  arrow::Status ReadAt(int64_t position, int64_t nbytes, std::shared_ptr<arrow::Buffer>* out) override {
+  arrow::Result<std::shared_ptr<arrow::Buffer>> ReadAt(
+      int64_t position, int64_t nbytes) override {
     string buffer;
     buffer.resize(nbytes);
     StringPiece result;
     Status status = file_->Read(position, nbytes, &result, (char*)(&buffer[0]));
     if (!(status.ok() || errors::IsOutOfRange(status))) {
-        return arrow::Status::IOError(status.error_message());
+      return arrow::Status::IOError(status.error_message());
     }
     buffer.resize(result.size());
-    return arrow::Buffer::FromString(buffer, out);
+    return arrow::Buffer::FromString(std::move(buffer));
   }
-private:
+
+ private:
   tensorflow::RandomAccessFile* file_;
   int64 size_;
   int64 position_;
 };
 
-
 }  // namespace data
 }  // namespace tensorflow
 
-#endif  // TENSORFLOW_IO_ARROW_KERNELS_H_
+#endif  // TENSORFLOW_IO_CORE_KERNELS_ARROW_KERNELS_H_

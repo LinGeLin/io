@@ -13,12 +13,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#ifndef TENSORFLOW_IO_ARROW_STREAM_CLIENT_H_
-#define TENSORFLOW_IO_ARROW_STREAM_CLIENT_H_
+#ifndef TENSORFLOW_IO_CORE_KERNELS_ARROW_STREAM_CLIENT_H_
+#define TENSORFLOW_IO_CORE_KERNELS_ARROW_STREAM_CLIENT_H_
 
 #include "arrow/io/api.h"
 
 namespace tensorflow {
+namespace data {
 
 // Class to wrap a socket as a readable Arrow InputStream
 class ArrowStreamClient : public arrow::io::InputStream {
@@ -29,10 +30,9 @@ class ArrowStreamClient : public arrow::io::InputStream {
   arrow::Status Connect();
   arrow::Status Close() override;
   bool closed() const override;
-  arrow::Status Tell(int64_t* position) const override;
-  arrow::Status Read(int64_t nbytes, int64_t* bytes_read, void* out) override;
-  arrow::Status Read(int64_t nbytes,
-                     std::shared_ptr<arrow::Buffer>* out) override;
+  arrow::Result<int64_t> Tell() const override;
+  arrow::Result<int64_t> Read(int64_t nbytes, void* out) override;
+  arrow::Result<std::shared_ptr<arrow::Buffer>> Read(int64_t nbytes) override;
 
  private:
   const std::string endpoint_;
@@ -40,6 +40,7 @@ class ArrowStreamClient : public arrow::io::InputStream {
   int64_t pos_;
 };
 
+}  // namespace data
 }  // namespace tensorflow
 
-#endif  // TENSORFLOW_IO_ARROW_STREAM_CLIENT_H_
+#endif  // TENSORFLOW_IO_CORE_KERNELS_ARROW_STREAM_CLIENT_H_

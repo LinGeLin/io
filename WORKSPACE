@@ -65,15 +65,48 @@ http_archive(
 )
 
 http_archive(
-    name = "aws",
-    build_file = "//third_party:aws.BUILD",
-    sha256 = "b888d8ce5fc10254c3dd6c9020c7764dd53cf39cf011249d0b4deda895de1b7c",
-    strip_prefix = "aws-sdk-cpp-1.3.15",
+    name = "aws-checksums",
+    build_file = "//third_party:aws-checksums.BUILD",
+    sha256 = "6e6bed6f75cf54006b6bafb01b3b96df19605572131a2260fddaf0e87949ced0",
+    strip_prefix = "aws-checksums-0.1.5",
     urls = [
-        "https://mirror.bazel.build/github.com/aws/aws-sdk-cpp/archive/1.3.15.tar.gz",
-        "https://github.com/aws/aws-sdk-cpp/archive/1.3.15.tar.gz",
+        "https://storage.googleapis.com/mirror.tensorflow.org/github.com/awslabs/aws-checksums/archive/v0.1.5.tar.gz",
+        "https://github.com/awslabs/aws-checksums/archive/v0.1.5.tar.gz",
     ],
 )
+
+http_archive(
+    name = "aws-c-common",
+    build_file = "//third_party:aws-c-common.BUILD",
+    sha256 = "01c2a58553a37b3aa5914d9e0bf7bf14507ff4937bc5872a678892ca20fcae1f",
+    strip_prefix = "aws-c-common-0.4.29",
+    urls = [
+        "https://storage.googleapis.com/mirror.tensorflow.org/github.com/awslabs/aws-c-common/archive/v0.4.29.tar.gz",
+        "https://github.com/awslabs/aws-c-common/archive/v0.4.29.tar.gz",
+    ],
+)
+
+http_archive(
+    name = "aws-c-event-stream",
+    build_file = "//third_party:aws-c-event-stream.BUILD",
+    sha256 = "31d880d1c868d3f3df1e1f4b45e56ac73724a4dc3449d04d47fc0746f6f077b6",
+    strip_prefix = "aws-c-event-stream-0.1.4",
+    urls = [
+        "https://storage.googleapis.com/mirror.tensorflow.org/github.com/awslabs/aws-c-event-stream/archive/v0.1.4.tar.gz",
+        "https://github.com/awslabs/aws-c-event-stream/archive/v0.1.4.tar.gz",
+    ],
+)
+
+#http_archive(
+#    name = "aws",
+#    build_file = "//third_party:aws.BUILD",
+#    sha256 = "b888d8ce5fc10254c3dd6c9020c7764dd53cf39cf011249d0b4deda895de1b7c",
+#    strip_prefix = "aws-sdk-cpp-1.3.15",
+#    urls = [
+#        "https://mirror.bazel.build/github.com/aws/aws-sdk-cpp/archive/1.3.15.tar.gz",
+#        "https://github.com/aws/aws-sdk-cpp/archive/1.3.15.tar.gz",
+#    ],
+#)
 
 http_archive(
     name = "snappy",
@@ -101,15 +134,11 @@ http_archive(
 http_archive(
     name = "arrow",
     build_file = "//third_party:arrow.BUILD",
-    patch_args = ["-p1"],
-    patches = [
-        "//third_party:parquet.patch",
-    ],
-    sha256 = "69d9de9ec60a3080543b28a5334dbaf892ca34235b8bd8f8c1c01a33253926c1",
-    strip_prefix = "arrow-apache-arrow-0.14.1",
+    sha256 = "19ece12de48e51ce4287d2dee00dc358fbc5ff02f41629d16076f77b8579e272",
+    strip_prefix = "arrow-apache-arrow-8.0.0",
     urls = [
-        "https://mirror.bazel.build/github.com/apache/arrow/archive/apache-arrow-0.14.1.tar.gz",
-        "https://github.com/apache/arrow/archive/apache-arrow-0.14.1.tar.gz",
+        "https://storage.googleapis.com/mirror.tensorflow.org/github.com/apache/arrow/archive/apache-arrow-8.0.0.tar.gz",
+        "https://github.com/apache/arrow/archive/apache-arrow-8.0.0.tar.gz",
     ],
 )
 
@@ -122,6 +151,77 @@ http_archive(
         "https://mirror.bazel.build/dl.bintray.com/boostorg/release/1.67.0/source/boost_1_67_0.tar.gz",
         "https://dl.bintray.com/boostorg/release/1.67.0/source/boost_1_67_0.tar.gz",
         "https://downloads.sourceforge.net/project/boost/boost/1.67.0/boost_1_67_0.tar.gz",
+    ],
+)
+
+http_archive(
+    name = "brotli",
+    build_file = "//third_party:brotli.BUILD",
+    sha256 = "4c61bfb0faca87219ea587326c467b95acb25555b53d1a421ffa3c8a9296ee2c",
+    strip_prefix = "brotli-1.0.7",
+    urls = [
+        "https://storage.googleapis.com/mirror.tensorflow.org/github.com/google/brotli/archive/v1.0.7.tar.gz",
+        "https://github.com/google/brotli/archive/v1.0.7.tar.gz",
+    ],
+)
+
+http_archive(
+    name = "aws-sdk-cpp",
+    build_file = "//third_party:aws-sdk-cpp.BUILD",
+    patch_cmds = [
+        """sed -i.bak 's/UUID::RandomUUID/Aws::Utils::UUID::RandomUUID/g' aws-cpp-sdk-core/source/client/AWSClient.cpp""",
+        """sed -i.bak 's/__attribute__((visibility("default")))//g' aws-cpp-sdk-core/include/aws/core/external/tinyxml2/tinyxml2.h """,
+    ],
+    sha256 = "749322a8be4594472512df8a21d9338d7181c643a00e08a0ff12f07e831e3346",
+    strip_prefix = "aws-sdk-cpp-1.8.186",
+    urls = [
+        "https://storage.googleapis.com/mirror.tensorflow.org/github.com/aws/aws-sdk-cpp/archive/1.8.186.tar.gz",
+        "https://github.com/aws/aws-sdk-cpp/archive/1.8.186.tar.gz",
+    ],
+)
+
+http_archive(
+    name = "lz4",
+    build_file = "//third_party:lz4.BUILD",
+    patch_cmds = [
+        """sed -i.bak 's/__attribute__ ((__visibility__ ("default")))//g' lib/lz4frame.h """,
+    ],
+    sha256 = "658ba6191fa44c92280d4aa2c271b0f4fbc0e34d249578dd05e50e76d0e5efcc",
+    strip_prefix = "lz4-1.9.2",
+    urls = [
+        "https://storage.googleapis.com/mirror.tensorflow.org/github.com/lz4/lz4/archive/v1.9.2.tar.gz",
+        "https://github.com/lz4/lz4/archive/v1.9.2.tar.gz",
+    ],
+)
+
+http_archive(
+    name = "xsimd",
+    build_file = "//third_party:xsimd.BUILD",
+    sha256 = "21b4700e9ef70f6c9a86952047efd8272317df4e6fee35963de9394fd9c5677f",
+    strip_prefix = "xsimd-8.0.1",
+    urls = [
+        "https://github.com/xtensor-stack/xsimd/archive/refs/tags/8.0.1.tar.gz",
+    ],
+)
+
+http_archive(
+    name = "zstd",
+    build_file = "//third_party:zstd.BUILD",
+    sha256 = "a364f5162c7d1a455cc915e8e3cf5f4bd8b75d09bc0f53965b0c9ca1383c52c8",
+    strip_prefix = "zstd-1.4.4",
+    urls = [
+        "https://storage.googleapis.com/mirror.tensorflow.org/github.com/facebook/zstd/archive/v1.4.4.tar.gz",
+        "https://github.com/facebook/zstd/archive/v1.4.4.tar.gz",
+    ],
+)
+
+http_archive(
+    name = "double-conversion",
+    sha256 = "a63ecb93182134ba4293fd5f22d6e08ca417caafa244afaa751cbfddf6415b13",
+    strip_prefix = "double-conversion-3.1.5",
+    urls = [
+        "https://storage.googleapis.com/mirror.tensorflow.org/github.com/google/double-conversion/archive/v3.1.5.tar.gz",
+        "https://github.com/google/double-conversion/archive/v3.1.5.tar.gz",
     ],
 )
 
