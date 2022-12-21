@@ -31,6 +31,7 @@ from tensorflow.python.data.ops import dataset_ops
 from tensorflow.python.data.util import structure as structure_lib
 from tensorflow_io.core.python.ops import core_ops
 
+
 if hasattr(tf, "nest"):
   from tensorflow import nest # pylint: disable=ungrouped-imports
 else:
@@ -132,6 +133,10 @@ class ArrowBaseDataset(dataset_ops.DatasetV2):
         batch_mode=self._batch_mode,
         **self._flat_structure)
     super(ArrowBaseDataset, self).__init__(variant_tensor)
+  
+  def make_one_shot_iterator(self):
+    """Wrapper of make_one_shot_iterator."""
+    return dataset_ops.make_one_shot_iterator(ds)
 
   def _inputs(self):
     return []
@@ -649,3 +654,84 @@ def list_feather_columns(filename, **kwargs):
   return dict([(column.numpy().decode(), tf.TensorSpec(
       shape.numpy(), dtype.numpy().decode(), column.numpy().decode())) for (
           column, dtype, shape) in entries])
+
+
+class ArrowS3Dataset(ArrowBaseDataset):
+    """An Arrow Dataset for reading record batches from an input stream.
+    Currently supported input streams are a socket client or stdin.
+    """
+
+    def __init__(
+        self,
+        aws_access_key,
+        aws_secret_key,
+        aws_endpoint_override,
+        parquet_files,
+        column_names,
+        columns,
+        output_types,
+        output_shapes=None,
+        batch_size=None,
+        batch_mode="keep_remainder",
+        filter="",
+        same_schema=True,
+    ):
+        """Create an ArrowDataset from an input stream.
+
+        Args:
+            aws_access_key: S3 access key
+            aws_secret_key: S3 secret key
+            aws_endpoint_override: S3 endpoint override
+            parquet_files: A list of parquet files path on s3
+            column_names: A list of column names to be used in the dataset
+            columns: A list of column indices to be used in the Dataset
+            output_types: Tensor dtypes of the output tensors
+            output_shapes: TensorShapes of the output tensors or None to
+                            infer partial
+            batch_size: Batch size of output tensors, setting a batch size here
+                        will create batched tensors from Arrow memory and can be more
+                        efficient than using tf.data.Dataset.batch().
+                        NOTE: batch_size does not need to be set if batch_mode='auto'
+            batch_mode: Mode of batching, supported strings:
+                        "keep_remainder" (default, keeps partial batch data),
+                        "drop_remainder" (discard partial batch data),
+                        "auto" (size to number of records in Arrow record batch)
+            filter : filter for reade row
+            same_schema : Whether the input files have the same view（default true）
+        """
+        aws_access_key = tf.convert_to_tensor(
+            aws_access_key, dtype=dtypes.string, name="aws_access_key"
+        )
+        aws_secret_key = tf.convert_to_tensor(
+            aws_secret_key, dtype=dtypes.string, name="aws_secret_key"
+        )
+        aws_endpoint_override = tf.convert_to_tensor(
+            aws_endpoint_override, dtype=dtypes.string, name="aws_endpoint_override"
+        )
+        parquet_files = tf.convert_to_tensor(
+            parquet_files, dtype=dtypes.string, name="parquet_files"
+        )
+        column_names = tf.convert_to_tensor(
+            column_names, dtype=dtypes.string, name="column_names"
+        )
+        filter = tf.convert_to_tensor(filter, dtype=dtypes.string, name="filter")
+        same_schema = tf.convert_to_tensor(
+            same_schema, dtype=dtypes.bool, name="same_schema"
+        )
+        super(ArrowS3Dataset, self).__init__(
+            partial(
+                core_ops.io_arrow_s3_dataset,
+                aws_access_key,
+                aws_secret_key,
+                aws_endpoint_override,
+                parquet_files,
+                column_names,
+                filter,
+                same_schema,
+            ),
+            columns,
+            output_types,
+            output_shapes,
+            batch_size,
+            batch_mode,
+        )
