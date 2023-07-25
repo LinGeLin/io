@@ -171,12 +171,13 @@ class ArrowAssignTensorImpl : public arrow::ArrayVisitor {
   ArrowAssignTensorImpl() : i_(0), out_tensor_(nullptr) {}
 
   Status AssignTensor(std::shared_ptr<arrow::Array> array, int64 i,
-                      Tensor* out_tensor) {
+                      const std::string& column_name, Tensor* out_tensor) {
     i_ = i;
     out_tensor_ = out_tensor;
     if (array->null_count() != 0) {
       return errors::Internal(
-          "Arrow arrays with null values not currently supported");
+          column_name +
+          " Arrow arrays with null values not currently supported");
     }
     CHECK_ARROW(array->Accept(this));
     return Status::OK();
@@ -290,9 +291,9 @@ class ArrowAssignTensorImpl : public arrow::ArrayVisitor {
 };
 
 Status AssignTensor(std::shared_ptr<arrow::Array> array, int64 i,
-                    Tensor* out_tensor) {
+                    const std::string& column_name, Tensor* out_tensor) {
   ArrowAssignTensorImpl visitor;
-  return visitor.AssignTensor(array, i, out_tensor);
+  return visitor.AssignTensor(array, i, column_name, out_tensor);
 }
 
 // Check the type of an Arrow array matches expected tensor type

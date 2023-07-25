@@ -171,6 +171,7 @@ class ArrowDatasetBase : public DatasetBase {
             int32 col = this->dataset()->columns_[i];
             DataType output_type = this->dataset()->output_types_[i];
             std::shared_ptr<arrow::Array> arr = current_batch_->column(col);
+            std::string column_name = current_batch_->column_name(col);
 
             // Get the TensorShape for the column batch
             TensorShape output_shape = TensorShape({});
@@ -186,8 +187,8 @@ class ArrowDatasetBase : public DatasetBase {
 
             // Allocate a new tensor and assign Arrow data to it
             Tensor tensor(ctx->allocator({}), output_type, output_shape);
-            TF_RETURN_IF_ERROR(
-                ArrowUtil::AssignTensor(arr, current_row_idx_, &tensor));
+            TF_RETURN_IF_ERROR(ArrowUtil::AssignTensor(arr, current_row_idx_,
+                                                       column_name, &tensor));
             result_tensors->emplace_back(std::move(tensor));
           }
 

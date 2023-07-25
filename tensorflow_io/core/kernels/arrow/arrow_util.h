@@ -63,7 +63,7 @@ Status AssignSpec(std::shared_ptr<arrow::Array> array, int64 i,
 
 // Assign elements of an Arrow Array to a Tensor
 Status AssignTensor(std::shared_ptr<arrow::Array> array, int64 i,
-                    Tensor* out_tensor);
+                    const std::string& column_name, Tensor* out_tensor);
 
 // Checks the Arrow Array datatype matches the expected TF datatype
 Status CheckArrayType(std::shared_ptr<arrow::DataType> type,
