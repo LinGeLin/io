@@ -87,6 +87,7 @@ class ArrowReadableResource : public ArrowReadableResourceBase {
     }
 
     auto chunked_arr = table_->column(column_index);
+    auto column_name = table_->ColumnNames()[column_index];
 
     // Slice with requested start/stop index
     if (start > 0 || stop - start < table_->num_rows()) {
@@ -101,7 +102,8 @@ class ArrowReadableResource : public ArrowReadableResourceBase {
     // Convert the array
     else if (chunked_arr->num_chunks() == 1) {
       auto arr = chunked_arr->chunk(0);
-      TF_RETURN_IF_ERROR(ArrowUtil::AssignTensor(arr, start, value));
+      TF_RETURN_IF_ERROR(
+          ArrowUtil::AssignTensor(arr, start, column_name, value));
     }
     // Convert each chunk at a time
     else {
@@ -113,7 +115,8 @@ class ArrowReadableResource : public ArrowReadableResourceBase {
         auto slice =
             value->Slice(length_converted, length_converted + arr->length());
 
-        TF_RETURN_IF_ERROR(ArrowUtil::AssignTensor(arr, start, &slice));
+        TF_RETURN_IF_ERROR(
+            ArrowUtil::AssignTensor(arr, start, column_name, &slice));
         length_converted += arr->length();
       }
     }
