@@ -283,11 +283,12 @@ class BigQueryReaderArrowDatasetIterator
       size_t arrow_column_index = this->column_indices_[i];
       std::shared_ptr<arrow::Array> arr =
           this->record_batch_->column(arrow_column_index);
+      std::string column_name = this->record_batch_->column_name(i);
 
       // Allocate a new tensor and assign Arrow data to it
       Tensor tensor(ctx->allocator({}), output_type, {});
-      TF_RETURN_IF_ERROR(
-          ArrowUtil::AssignTensor(arr, this->current_row_index_, &tensor));
+      TF_RETURN_IF_ERROR(ArrowUtil::AssignTensor(arr, this->current_row_index_,
+                                                 column_name, &tensor));
 
       out_tensors->emplace_back(std::move(tensor));
     }
