@@ -1032,9 +1032,9 @@ class ArrowS3DatasetOp : public ArrowOpKernelBase {
 
     string DebugString() const override { return "ArrowS3DatasetOp::Dataset"; }
     Status InputDatasets(std::vector<const DatasetBase*>* inputs) const {
-      return Status::OK();
+      return OkStatus();
     }
-    Status CheckExternalState() const override { return Status::OK(); }
+    Status CheckExternalState() const override { return OkStatus(); }
 
    protected:
     Status AsGraphDefInternal(SerializationContext* ctx,
@@ -1072,7 +1072,7 @@ class ArrowS3DatasetOp : public ArrowOpKernelBase {
           {aws_access_key, aws_secret_key, aws_endpoint_override, parquet_files,
            column_names, filter, same_schema, columns, batch_size, batch_mode},
           output));
-      return Status::OK();
+      return OkStatus();
     }
 
     std::unique_ptr<IteratorBase> MakeIteratorInternal(
@@ -1128,7 +1128,7 @@ class ArrowS3DatasetOp : public ArrowOpKernelBase {
           background_worker_->Schedule(std::bind(&Iterator::ReadFile, this,
                                                  current_file_idx_ + 1, true));
         }
-        return Status::OK();
+        return OkStatus();
       }
 
       Status NextStreamLocked(Env* env)
@@ -1169,7 +1169,7 @@ class ArrowS3DatasetOp : public ArrowOpKernelBase {
                 &Iterator::ReadFile, this, current_file_idx_ + 1, true));
           }
         }
-        return Status::OK();
+        return OkStatus();
       }
 
       void ResetStreamsLocked() TF_EXCLUSIVE_LOCKS_REQUIRED(mu_) override {
@@ -1182,7 +1182,7 @@ class ArrowS3DatasetOp : public ArrowOpKernelBase {
 
       Status ReadFile(int file_index, bool background = false)
           TF_EXCLUSIVE_LOCKS_REQUIRED(mu_) {
-        Status res = Status::OK();
+        Status res = OkStatus();
         do {
           auto access_file_result =
               s3fs_->OpenInputFile(dataset()->parquet_files_[file_index]);
@@ -1310,7 +1310,7 @@ class ArrowS3DatasetOp : public ArrowOpKernelBase {
       mutex cv_mu_;
       condition_variable cv_;
       bool background_thread_finished_ = false;
-      Status background_res_ = Status::OK();
+      Status background_res_ = OkStatus();
     };
 
     const std::string aws_access_key_;

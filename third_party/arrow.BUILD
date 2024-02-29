@@ -7,6 +7,23 @@ licenses(["notice"])  # Apache 2.0
 
 exports_files(["LICENSE.txt"])
 
+# flatbuffer_cc_library(
+#     name = "arrow_format",
+#     srcs = [
+#         "cpp/src/arrow/ipc/feather.fbs",
+#         "format/File.fbs",
+#         "format/Message.fbs",
+#         "format/Schema.fbs",
+#         "format/SparseTensor.fbs",
+#         "format/Tensor.fbs",
+#     ],
+#     flatc_args = [
+#         "--scoped-enums",
+#         "--gen-object-api",
+#     ],
+#     out_prefix = "cpp/src/generated/",
+# )
+
 genrule(
     name = "arrow_util_config",
     srcs = ["cpp/src/arrow/util/config.h.cmake"],
@@ -49,7 +66,7 @@ cc_library(
             "cpp/src/arrow/json/*.cc",
             "cpp/src/arrow/tensor/*.cc",
             "cpp/src/arrow/util/*.cc",
-            "cpp/src/arrow/vendored/musl/strptime.c",
+            # "cpp/src/arrow/vendored/musl/strptime.c",strptime.c
             "cpp/src/arrow/vendored/optional.hpp",
             "cpp/src/arrow/vendored/string_view.hpp",
             "cpp/src/arrow/vendored/variant.hpp",
@@ -130,7 +147,7 @@ cc_library(
         "cpp/src/arrow/vendored/xxhash/xxhash.c",
     ],
     deps = [
-        ":arrow_format",
+        # ":arrow_format",
         "@aws-sdk-cpp//:identity-management",
         "@aws-sdk-cpp//:s3",
         "@boringssl//:crypto",

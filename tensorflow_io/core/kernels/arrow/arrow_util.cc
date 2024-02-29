@@ -853,7 +853,7 @@ class Interpreter {
     }
     rt->type_ = calType::VARIABLE;
     expr = rt->expression_;
-    return Status::OK();
+    return OkStatus();
   }
 
   Status interpreter(std::shared_ptr<ASTNode>& ASTree) {
@@ -865,7 +865,7 @@ class Interpreter {
           "Your filter expression is not supported!");
     }
     ASTree = root;
-    return Status::OK();
+    return OkStatus();
   }
 
  private:
@@ -881,7 +881,7 @@ Status ParseExpression(const std::string& text,
   std::shared_ptr<ASTNode> ASTree;
   TF_RETURN_IF_ERROR(interpreter_ptr->interpreter(ASTree));
   TF_RETURN_IF_ERROR(interpreter_ptr->visit(expr, ASTree));
-  return Status::OK();
+  return OkStatus();
 }
 
 }  // namespace ArrowUtil
