@@ -8,6 +8,18 @@ load(
 )
 
 cc_library(
+    name="tf_head",
+    srcs = [
+        "tf_head/c_api_macros.h",
+        "tf_head/filesystem_interface.h",
+        "tf_head/tf_file_statistics.h",
+        "tf_head/tf_status.h",
+        "tf_head/tsl_status.h",
+        "tf_head/logging.h",
+    ]
+)
+
+cc_library(
     name = "filesystem_plugins_header",
     srcs = [
         "filesystem_plugins.h",
@@ -31,11 +43,25 @@ cc_library(
 cc_library(
     name = "filesystem_plugins",
     srcs = [
+        "filesystem_plugins.h",
         "filesystem_plugins.cc",
-    ],
+        "tf_head/c_api_macros.h",
+        "tf_head/filesystem_interface.h",
+        "tf_head/tf_file_statistics.h",
+        "tf_head/tf_status.h",
+        "tf_head/tsl_status.h",
+    ] + select({
+        "@bazel_tools//src/conditions:windows": [
+            "@local_config_tf//:stub/libtensorflow_framework.lib",
+        ],
+        "//conditions:default": [
+            "@local_config_tf//:stub/libtensorflow_framework.so",
+        ],
+    }),
     copts = tf_io_copts(),
     linkstatic = True,
     deps = [
+        ":filesystem_plugins_header",
         "//tensorflow_io/core/filesystems/az",
         "//tensorflow_io/core/filesystems/hdfs",
         "//tensorflow_io/core/filesystems/http",

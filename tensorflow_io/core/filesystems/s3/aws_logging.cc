@@ -23,7 +23,7 @@ limitations under the License.
 #include <sstream>
 
 #include "absl/synchronization/mutex.h"
-#include "tensorflow/c/logging.h"
+#include "tensorflow_io/core/filesystems/tf_head/logging.h"
 
 namespace tensorflow {
 namespace io {

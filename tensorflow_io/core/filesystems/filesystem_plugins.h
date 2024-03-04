@@ -18,7 +18,7 @@ limitations under the License.
 
 #include <stdlib.h>
 
-#include "tensorflow/c/experimental/filesystem/filesystem_interface.h"
+#include "tf_head/filesystem_interface.h"
 
 namespace tensorflow {
 namespace io {

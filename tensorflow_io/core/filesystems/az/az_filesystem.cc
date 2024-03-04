@@ -29,8 +29,8 @@ limitations under the License.
 #include "absl/strings/strip.h"
 #include "azure/storage/blobs/blob_container_client.hpp"
 #include "azure/storage/blobs/block_blob_client.hpp"
-#include "tensorflow/c/logging.h"
-#include "tensorflow/c/tf_status.h"
+#include "tensorflow_io/core/filesystems/tf_head/logging.h"
+#include "tensorflow_io/core/filesystems/tf_head/tf_status.h"
 #include "tensorflow_io/core/filesystems/filesystem_plugins.h"
 
 namespace tensorflow {

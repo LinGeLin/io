@@ -16,6 +16,7 @@ cc_library(
     linkstatic = True,
     deps = [
         "//tensorflow_io/core/filesystems:filesystem_plugins_header",
+        "//tensorflow_io/core/filesystems:tf_head",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/synchronization",
         "@com_google_absl//absl/time",

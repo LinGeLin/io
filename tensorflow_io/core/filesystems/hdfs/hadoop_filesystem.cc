@@ -31,8 +31,8 @@ limitations under the License.
 #include "absl/strings/str_cat.h"
 #include "absl/synchronization/mutex.h"
 #include "hdfs/hdfs.h"
-#include "tensorflow/c/logging.h"
-#include "tensorflow/c/tf_status.h"
+#include "tensorflow_io/core/filesystems/tf_head/logging.h"
+#include "tensorflow_io/core/filesystems/tf_head/tf_status.h"
 #include "tensorflow_io/core/filesystems/filesystem_plugins.h"
 
 namespace tensorflow {

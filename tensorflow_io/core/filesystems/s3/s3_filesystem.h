@@ -23,8 +23,8 @@ limitations under the License.
 #include <aws/transfer/TransferManager.h>
 
 #include "absl/synchronization/mutex.h"
-#include "tensorflow/c/experimental/filesystem/filesystem_interface.h"
-#include "tensorflow/c/tf_status.h"
+#include "tensorflow_io/core/filesystems/tf_head/filesystem_interface.h"
+#include "tensorflow_io/core/filesystems/tf_head/tf_status.h"
 
 namespace tensorflow {
 namespace io {
